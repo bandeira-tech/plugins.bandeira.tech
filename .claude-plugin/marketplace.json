@@ -1,0 +1,16 @@
+{
+  "name": "bandeira-tech",
+  "description": "BANDEIRA·TECH plugins for Claude Code.",
+  "version": "0.1.0",
+  "owner": {
+    "name": "Bandeira Tech",
+    "url": "https://github.com/bandeira-tech"
+  },
+  "plugins": [
+    {
+      "name": "b3nd",
+      "source": "./b3nd",
+      "description": "Build with B3nd — your own rig, your own data, apps as URI shapes + on-the-fly UI. Wraps the `bnd` CLI as an MCP server."
+    }
+  ]
+}
