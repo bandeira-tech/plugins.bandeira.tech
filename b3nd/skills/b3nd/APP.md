@@ -106,7 +106,7 @@ After the scaffold, the most important thing to leave the user with is a clear s
   bnd observe 'journal://entry/**'
   ```
 
-When the user sees that the UI and the CLI drive the *same* substrate, the data-oriented model clicks. That's the moment to leave them.
+When the user sees that the UI and the CLI drive the *same* URIs through the same rig, Data Oriented Architecture clicks. That's the moment to leave them.
 
 ## Common shapes that go wrong
 

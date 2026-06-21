@@ -6,7 +6,7 @@ This is the plainest version of the pitch. No jargon until the second half. Use 
 
 ## The promise, in one paragraph
 
-You have data. It lives in too many places: chat tools, notes apps, your filesystem, three cloud accounts, that one spreadsheet. Every app that touches it has its own copy and its own rules. When you want a new app — built by you, by an agent, anyone — you start from zero again. **B3nd is the substrate that fixes that.** You run a small thing called a *rig* on your computer (and optionally on a node somewhere). Apps don't have their own databases — they read and write through your rig, into your storage. AI agents read and write the same way. You get to keep your data; the apps get to be tiny.
+You have data. It lives in too many places: chat tools, notes apps, your filesystem, three cloud accounts, that one spreadsheet. Every app that touches it has its own copy and its own rules. When you want a new app — built by you, by an agent, anyone — you start from zero again. **B3nd is what fixes that.** You run a small thing called a *rig* on your computer (and optionally on a node somewhere). Apps don't have their own databases — they read and write through your rig, into your storage. AI agents read and write the same way. You get to keep your data; the apps get to be tiny.
 
 That's the whole idea. The rest of the framework is what makes it actually work.
 
@@ -23,7 +23,7 @@ What changes for the user: you stop thinking about "which app holds my data". Th
 ## Who this is for
 
 - **Builders.** People shipping things — solo, small team, agency. You want fewer moving parts and more leverage. B3nd lets you write the rules once and reuse them across every surface (CLI, web, MCP, server).
-- **Entrepreneurs modernizing operations with AI.** You want digital tools that fit your business, not the other way around. With B3nd you accumulate one data substrate that every AI tool and every custom app you ever build can read. It compounds.
+- **Entrepreneurs modernizing operations with AI.** You want digital tools that fit your business, not the other way around. With B3nd you accumulate one rig — one set of URIs you own — that every AI tool and every custom app you ever build can read. It compounds.
 - **Protocol designers and DePIN engineers.** You're designing the shape of something other people will compose on. B3nd is built for this — programs and handlers are first-class, schemes are deliberate, the trust model is in your hands.
 
 You don't have to be all three. You don't have to know which one you are yet.
@@ -52,13 +52,13 @@ A program is a thinker. A handler is a translator. The rig is the postman. The U
 
 Because services bake everything together: data, rules, transport, storage, UI, deploy. Change one and the whole thing trembles. B3nd splits them. The cost is one more abstraction (codes, between programs and handlers); the payoff is enormous when you have more than one app, more than one storage backend, or more than one surface (CLI + browser + MCP) — which, once you start, you always do.
 
-There's a longer version of this argument in [DATA_ORIENTED.md](./DATA_ORIENTED.md). Read it when the user asks "why this and not Express", or when you yourself reach for service-shaped scaffolding by reflex.
+There's a longer version of this argument in [ARCHITECTURE.md](./ARCHITECTURE.md), which lays out Data Oriented Architecture, the three integration patterns for bringing b3nd into existing systems, and the anti-patterns to dodge. Read it when the user is designing an app or unsure where the data contract lives.
 
 ## Where to go from here
 
 - "How do I install this and get a rig running?" → `/b3nd:install`, then `/b3nd:targets` to pick or add a target.
 - "Help me build my first app." → `/b3nd:new-app`. The command walks the whole thing.
-- "I want the architecture pitch in detail." → DATA_ORIENTED.md.
+- "I want the architecture pitch in detail." → ARCHITECTURE.md.
 - "I want the package list and current API surface." → TARGETS.md.
 
 ## One thing to remember

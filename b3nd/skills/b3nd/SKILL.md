@@ -21,9 +21,11 @@ description: |
 
   - START.md — the door. Read first if the user is new to B3nd, asking
     "what is this", or you (Claude) need to ground yourself.
-  - DATA_ORIENTED.md — why B3nd looks the way it does. The contrast
-    against service-oriented design. Read when the user is unsure why
-    they would not "just build a service".
+  - ARCHITECTURE.md — Data Oriented Architecture in b3nd terms. The
+    URI table as the contract, three integration patterns for bringing
+    b3nd into existing systems, and the anti-patterns when SOA reflexes
+    leak in. Read when the user is designing an application or unsure
+    where the data contract lives.
   - RIG.md — what a rig is, what `bnd` does with it, how to grow one,
     how multi-target works in this plugin. Read when the user wants to
     add a connection, switch targets, or understand `bnd status`.
@@ -64,7 +66,7 @@ B3nd is a framework where the unit of work is a **message** — `[uri, payload]`
 
 What that buys:
 
-- One data substrate, many apps and agents on top.
+- One rig, many apps and agents reading and writing the same URIs.
 - Storage you can swap (SQLite today, Postgres tomorrow, S3 next week) without touching business rules.
 - AI memory that survives sessions, models, and tools — it's in the user's rig, not in an app's database.
 - Apps that ship as **URI shapes + on-the-fly UI**, not as servers to deploy and run.
@@ -74,7 +76,7 @@ What that buys:
 | If the user is… | Read |
 |---|---|
 | New, just heard "b3nd", or asking "what is this" | START.md |
-| Comparing this to building "a service / API / app" | DATA_ORIENTED.md |
+| Designing an app, or unsure where the data contract lives | ARCHITECTURE.md |
 | Adding a connection, picking a backend, switching targets | RIG.md |
 | Starting a new app from scratch | APP.md |
 | Writing a program or struggling to keep it pure | PROGRAMS.md |
@@ -87,7 +89,7 @@ What that buys:
 
 ### 1. Service-oriented thinking by reflex
 
-The biggest failure mode is treating B3nd as "Express with extra steps". If you find yourself sketching endpoints, routes, controllers, or "the API surface" — pause. In B3nd the surface is the URI shape. The protocol is data. The rig routes. Stop and re-read DATA_ORIENTED.md before continuing.
+The biggest failure mode is treating B3nd as "Express with extra steps". If you find yourself sketching endpoints, routes, controllers, or "the API surface" — pause. In B3nd the surface is the URI shape. The protocol is data. The rig routes. Stop and re-read ARCHITECTURE.md before continuing.
 
 ### 2. Generating code from this skill's prose
 
