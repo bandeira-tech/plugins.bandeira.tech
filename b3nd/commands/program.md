@@ -20,7 +20,7 @@ Programs are **not** handlers. Handlers turn codes into effects (writes, emits).
 1. **Verify the live API.** Read the user's installed `@bandeira-tech/b3nd-core` version, then fetch the current `Program`, `Code`, `Output` type signatures from JSR before generating code. Do not write from memory.
 
 2. **Ask before assuming.**
-   - What URI scheme(s) does this program classify? (e.g. `myapp://posts/...`, `hash://sha256/...`)
+   - What URI patterns does this program classify? (e.g. `data://posts/...`, `hash://sha256/...`). The default scheme is `data://`; the protocol's basepath is operator-chosen at instantiation.
    - What codes does it emit? Common shapes: store-by-URI, emit-derivative, validate-only. The user describes; you propose 1–3 codes; they confirm.
    - Is this program **input-side** (runs on `receive`) or **read-side** (runs on `read`)? Most are input-side.
 
@@ -39,5 +39,5 @@ Programs are **not** handlers. Handlers turn codes into effects (writes, emits).
 ## What goes wrong
 
 - **Mixing program + handler logic in one function.** If your program has a network call, a write, or a `Date.now()`, it's not a program anymore — it's a handler. Stop and split.
-- **Hard-coded URI schemes.** The scheme should be a parameter of the protocol module, not baked into the program file. If the protocol picks `myapp://` at instantiation, the program should receive it via closure or registry, not import a constant.
+- **Hard-coded URI schemes or basepaths.** The basepath should be a parameter of the protocol module (default `data://`, or a behavior-named base like `signed://<key>/` chosen by the operator), not baked into the program file. The program should receive it via closure or registry, not import a constant.
 - **Codes that aren't really codes.** If you're emitting `{ kind: "doTheThing", payload }` with no schema, the consumer (handler) has no contract. Codes should be small, named, and shaped.

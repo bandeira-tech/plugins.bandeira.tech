@@ -26,9 +26,9 @@ import { fsStore } from "@bandeira-tech/b3nd-save/fs";
 import { s3Store } from "@bandeira-tech/b3nd-save/s3";
 
 export default async () => {
-  const drafts = connection(fsStore({ root: "~/journal" }), ["journal://drafts/**"]);
+  const drafts = connection(fsStore({ root: "~/journal" }), ["data://drafts/**"]);
   const node   = await createClientFromUrl("https://my-node.example.com");
-  const shared = connection(node, ["journal://posts/**", "journal://comments/**"]);
+  const shared = connection(node, ["data://posts/**", "data://comments/**"]);
   const blobs  = connection(s3Store({ bucket: "journal-blobs" }), ["hash://sha256/**"]);
 
   return new Rig({
@@ -55,7 +55,7 @@ Plain: each route is a verb your code does, and the rig decides which connection
 | `observe` | Tell me whenever URIs matching this pattern change. | `bnd observe`, reactive UIs, agents. |
 | `send` | Push outputs outward (to a peer, another node, a transport). | Protocols that publish, replicators. |
 
-For the journal rig above: `bnd read 'journal://posts/2026-06-21-*'` consults `shared` (the remote node) because `shared` owns `journal://posts/**`. A draft write at `journal://drafts/today` goes to the local FS. A binary attachment lands at `hash://sha256/...` on S3. None of that branching lives in the protocol — it lives in the rig.
+For the journal rig above: `bnd read 'data://posts/2026-06-21-*'` consults `shared` (the remote node) because `shared` owns `data://posts/**`. A draft write at `data://drafts/today` goes to the local FS. A binary attachment lands at `hash://sha256/...` on S3. None of that branching lives in the protocol — it lives in the rig.
 
 ## What `bnd` does with a rig
 
@@ -99,8 +99,8 @@ The `[patterns]` argument is the most consequential decision in the file. It say
 const everything = connection(node, ["**"]);
 
 // Do (journal example):
-const drafts = connection(fsStore(...), ["journal://drafts/**"]);
-const shared = connection(node,         ["journal://posts/**", "journal://comments/**"]);
+const drafts = connection(fsStore(...), ["data://drafts/**"]);
+const shared = connection(node,         ["data://posts/**", "data://comments/**"]);
 const blobs  = connection(s3Store(...), ["hash://sha256/**"]);
 ```
 
@@ -122,9 +122,9 @@ If the user is happy with how the connection participates in routes but wants Po
 
 ```ts
 // before:
-const drafts = connection(fsStore({ root: "~/journal" }), ["journal://drafts/**"]);
+const drafts = connection(fsStore({ root: "~/journal" }), ["data://drafts/**"]);
 // after:
-const drafts = connection(sqliteStore({ file: "~/.journal.db" }), ["journal://drafts/**"]);
+const drafts = connection(sqliteStore({ file: "~/.journal.db" }), ["data://drafts/**"]);
 ```
 
 The protocol doesn't care. The UI doesn't care. The user's existing URIs are still the contract.
@@ -136,11 +136,11 @@ Plain: when something flows through, you almost always want to react to it — v
 The split is intentional. Protocols answer *what the data means*; the rig answers *what happens around the data flowing*. Things that fit the second category and belong on the rig:
 
 - **Validation at the seam** — reject malformed payloads on `receive` before they reach a handler. Keeps handlers pure.
-- **Audit / logging** — every write to `journal://posts/**` writes a paired line to `journal://audit/{ts}` so you can replay the day.
+- **Audit / logging** — every write to `data://posts/**` writes a paired line to `data://audit/{ts}` so you can replay the day.
 - **Response shaping** — after `receive` completes, return a structured ack the caller can consume (the result of a write, a derived URI, an error envelope).
 - **Routing decisions on data**, not on URI patterns alone — e.g. blobs over 4MB go to S3, smaller ones to local FS. The pattern `hash://sha256/**` decides *what kind*; a hook decides *which physical store*.
 - **Observability** — emit metrics or traces every time a route fires. The protocol shouldn't know about your tracer; the rig can.
-- **Reactive fan-out** — on `receive` of a `journal://posts/**` write, mirror to `journal://feeds/{author}/**` so observers downstream see it without the protocol orchestrating fan-out.
+- **Reactive fan-out** — on `receive` of a `data://posts/**` write, mirror to `data://feeds/{author}/**` so observers downstream see it without the protocol orchestrating fan-out.
 
 The mental model: a `ProtocolInterfaceNode` is "the business" — it knows the rules for journal entries. The rig is the **mechanical data affordances** that wrap business: validation, audit, fan-out, response handling, observation. The node stays small and pure; the rig handles the inevitable surface area of moving data through a real system.
 
@@ -152,7 +152,7 @@ Plain: ask the rig what it thinks it is, then trust that view as your first diag
 
 `bnd status` returns the resolved rig's view of itself: which connections are wired, which patterns they own, which routes they participate in, whether they're reachable, which hooks are registered. Use it as the first diagnostic when something is off:
 
-- "I wrote a post and nothing happened" → check `status` for a connection that owns `journal://posts/**` in `receive`.
+- "I wrote a post and nothing happened" → check `status` for a connection that owns `data://posts/**` in `receive`.
 - "I can read but my UI doesn't refresh" → connection likely wired in `read` but not `observe`.
 - "Everything is slow" → a remote connection may be timing out; status often surfaces it.
 
@@ -192,7 +192,7 @@ If you find yourself writing any of the above in `b3nd.rig.ts`, stop. The rig is
 
 ## Common rig mistakes to catch
 
-- **Overlapping patterns with conflicting backends.** Two connections in `receive` both owning `journal://posts/**` — first one wins, the second is dead weight. Tell the user; narrow one.
+- **Overlapping patterns with conflicting backends.** Two connections in `receive` both owning `data://posts/**` — first one wins, the second is dead weight. Tell the user; narrow one.
 - **`["**"]` everywhere.** Wildcards are fine for a single-connection rig. Once there are two connections, narrow patterns. Otherwise routing depends on array order, which is fragile.
 - **A connection in `read` but not `observe`.** Common after adding a remote node. The user notices "I can read this but my UI never refreshes". Mirror connections across both unless there's a clear reason not to.
 - **Bypassing the rig.** If a handler or a UI is calling `fetch` directly to "just get the data fast", that's a leak. The rig is the only thing that should reach across boundaries. Push the user back through `read`/`observe`.

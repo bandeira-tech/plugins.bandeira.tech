@@ -12,25 +12,27 @@ When a new consumer arrives — another app, another agent, another device — i
 
 ## A concrete protocol — ecommerce
 
-Mounted under `shop://` for clarity (in production prefer behavior-named bases like `signed://<merchant-key>/shop/` or `encrypted://shop/customers/`; the protocol module accepts the basepath as a factory parameter so the mount is the user's call, not the app vendor's).
+URI schemes name *behavior*, not domains. The protocol module uses a generic `data://` default; the operator (or the user) injects a basepath at instantiation — `data://`, `signed://<merchant-key>/store/`, `encrypted://store/customers/`, or anything else — so the same protocol mounts under whatever scheme the deployment calls for. Domain names ("catalog", "orders") live in the path, never in the scheme.
+
+The table below shows the protocol at its default mount:
 
 | URI pattern | Role |
 |---|---|
-| `shop://catalog/p/<sku>/data/<field>` | Product fields (title, price, description) — one field per write |
-| `shop://catalog/p/<sku>/images/<n>` | Image references; payload is `hash://sha256/...` |
+| `data://catalog/p/<sku>/<field>` | Product fields (title, price, description) — one field per write |
+| `data://catalog/p/<sku>/images/<n>` | Image references; payload is `hash://sha256/...` |
 | `hash://sha256/<digest>` | Image (and other) blob bytes; integrity self-evident |
-| `shop://catalog/index/by-category/<category>/<sku>` | Derived index; rebuildable from `catalog/p/**` |
-| `shop://inventory/p/<sku>/data/on-hand` | Current stock count |
-| `shop://inventory/p/<sku>/entries/<ts>-<kind>` | Append-only stock movements (`received`, `sold`, `adjusted`, `reserved`) |
-| `shop://customers/c/<customer-id>/data/<field>` | Customer profile fields |
-| `shop://orders/o/<order-id>/data/<field>` | Order header (customer, total, currency) |
-| `shop://orders/o/<order-id>/lines/<n>` | Order line items (sku, qty, unit-price) |
-| `shop://orders/o/<order-id>/entries/<ts>-<kind>` | Order event log (`placed`, `paid`, `picked`, `shipped`, `refunded`) |
-| `shop://orders/index/by-customer/<customer-id>/<ts>-<order-id>` | Customer's orders, time-sorted |
-| `shop://fulfillment/shipments/s/<shipment-id>/data/<field>` | Shipment header (carrier, tracking, status) |
-| `shop://fulfillment/shipments/s/<shipment-id>/orders/<order-id>` | Shipment ↔ order relation |
+| `data://catalog/index/by-category/<category>/<sku>` | Derived index; rebuildable from `catalog/p/**` |
+| `data://inventory/p/<sku>/on-hand` | Current stock count |
+| `data://inventory/p/<sku>/entries/<ts>-<kind>` | Append-only stock movements (`received`, `sold`, `adjusted`, `reserved`) |
+| `data://customers/c/<customer-id>/<field>` | Customer profile fields |
+| `data://orders/o/<order-id>/<field>` | Order header (customer, total, currency) |
+| `data://orders/o/<order-id>/lines/<n>` | Order line items (sku, qty, unit-price) |
+| `data://orders/o/<order-id>/entries/<ts>-<kind>` | Order event log (`placed`, `paid`, `picked`, `shipped`, `refunded`) |
+| `data://orders/index/by-customer/<customer-id>/<ts>-<order-id>` | Customer's orders, time-sorted |
+| `data://fulfillment/shipments/s/<shipment-id>/<field>` | Shipment header (carrier, tracking, status) |
+| `data://fulfillment/shipments/s/<shipment-id>/orders/<order-id>` | Shipment ↔ order relation |
 
-Programs are keyed by prefix (`shop://catalog/`, `shop://inventory/`, `shop://orders/`, `shop://fulfillment/`, `shop://customers/`, `hash://sha256/`). Order status, on-hand quantity, customer order history are **derivable from URI listings** — not stored as fields. A read at `shop://orders/o/<id>` folds the subtree on the node side; status is computed from the entries listing.
+Programs are keyed by prefix (`data://catalog/`, `data://inventory/`, `data://orders/`, `data://fulfillment/`, `data://customers/`, `hash://sha256/`). Order status, on-hand quantity, customer order history are **derivable from URI listings** — not stored as fields. A read at `data://orders/o/<id>` folds the subtree on the node side; status is computed from the entries listing.
 
 That table is the design. Everything else — services, UI, agents, replication — composes onto it.
 
@@ -56,7 +58,7 @@ The storefront writes directly to the rig. Programs validate (is this a signed o
 
 ### Backend — b3nd is the data layer; everything else is a consumer
 
-The catalog admin, the storefront, the warehouse picker UI, and the analytics consumer are all `receive`/`read`/`observe` clients of the same rig. Operators pin the rig across regions; reads serve locally, receives propagate. A new "loyalty" feature is a new URI prefix (`shop://loyalty/`) and a new program — no new service.
+The catalog admin, the storefront, the warehouse picker UI, and the analytics consumer are all `receive`/`read`/`observe` clients of the same rig. Operators pin the rig across regions; reads serve locally, receives propagate. A new "loyalty" feature is a new URI prefix (`data://loyalty/`) and a new program — no new service.
 
 - **Where the data contract lives:** the protocol module — the only contract any consumer depends on.
 - **What enforces it:** the rig, uniformly, regardless of which transport the consumer uses (HTTP, WS, gRPC, MCP, in-process).
@@ -69,17 +71,17 @@ These are the ways DOA is undone in practice. None of them throw an error; all o
 **Bespoke verbs on top of the rig.**
 Shipping `create_order` / `list_orders` MCP tools or `POST /orders` HTTP endpoints instead of letting `b3nd_receive` and `b3nd_read` carry the URI grammar. If a consumer (a UI, an agent, a downstream service) has to learn verbs *and* URIs to interact, the data contract is no longer load-bearing — it's been demoted to a parameter of a service tier.
 
-**Domain-named schemes for every concern.**
-Inventing `order://`, `customer://`, `product://` when behavior-named schemes (`signed://`, `immutable://`, `encrypted://`, `hash://`) would compose. Schemes should name *behavior*; paths name the application. One concrete sign of this anti-pattern: every new app reinvents its own foundational surface (signing, integrity, encryption) from scratch.
+**Domain-named schemes.**
+Inventing `order://`, `customer://`, `product://`, `shop://` — any scheme that names a domain. Schemes name *behavior* (`signed://`, `immutable://`, `encrypted://`, `hash://`) or stay generic (`data://`); paths name the application. One concrete sign of this anti-pattern: every new app reinvents its own foundational surface (signing, integrity, encryption) from scratch because its scheme can't compose under one that already provides those.
 
 **Record-shaped payloads where a URI subtree would do.**
-Writing the whole order as one JSON blob at `shop://orders/o/<id>`, then read-modify-write for every line edit or status change. Decompose into `data/`, `entries/`, `lines/`. Editing a line is one write. Status derives from the entries listing. The subtree is the record.
+Writing the whole order as one JSON blob at `data://orders/o/<id>`, then read-modify-write for every line edit or status change. Decompose into one URI per field, an `entries/` collection for the event log, a `lines/` collection for items. Editing a line is one write. Status derives from the entries listing. The subtree is the record.
 
 **Programs that store, mutate, or network.**
 Treating a program as "the controller" — calling out to Stripe, writing to a DB, emitting metrics, reading `Date.now()`. Programs are pure classifiers from `[uri, payload]` to codes. Side effects belong in handlers (which return outputs for the rig to dispatch) or in reactions (which fire after broadcast lands). If your program has an `await` for I/O, it isn't a program anymore.
 
 **Hard-coded scheme or basepath in the protocol module.**
-Shipping a protocol that only works at `shop://`. The factory pattern — `shopProtocol("signed://0xMerchant/shop/")` — is what lets the *user* decide where the data lives. Without it, the app becomes the moat. A protocol whose basepath is a constant is a protocol that can't be composed into anyone else's rig.
+Shipping a protocol whose URIs assume the default `data://` is permanent, or that bakes in any other scheme. The factory pattern — `ecommerceProtocol({ basepath: "signed://0xMerchant/store/" })` — is what lets the operator decide where the data lives. Without it, the app becomes the moat. A protocol whose basepath is a constant is a protocol that can't be composed into anyone else's rig.
 
 ## See also
 

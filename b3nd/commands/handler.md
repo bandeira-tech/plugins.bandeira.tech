@@ -38,4 +38,4 @@ If your "handler" calls `fetch`, opens a file, or talks to a DB directly, you've
 
 - **Effectful handlers.** No fetch, no fs, no time. Returns outputs; that's it.
 - **Code-kind collisions.** Two handlers claiming the same code kind. Detect by grepping the registry and warn before writing.
-- **Output URIs that don't match any connection.** If the handler emits `[someapp://x, payload]` and no connection owns `someapp://**`, the rig drops it. Make sure the protocol's installer documents which connections it expects.
+- **Output URIs that don't match any connection.** If the handler emits `[data://x, payload]` and no connection owns `data://**` (or whichever basepath the protocol was mounted under), the rig drops it. Make sure the protocol's installer documents which connections it expects.

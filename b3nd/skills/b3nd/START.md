@@ -42,7 +42,7 @@ When you go deeper into this skill you'll see four words used constantly. Transl
 | Word | Plain version |
 |---|---|
 | **rig** | the little wiring diagram that holds your data and decides who can read/write what |
-| **URI** | the address of a piece of data. `myapp://posts/2026-06-18` is a URI. |
+| **URI** | the address of a piece of data. `data://posts/2026-06-18` is a URI. The default scheme is `data://`; operators can mount apps under behavior-named schemes like `signed://` or `encrypted://` instead. |
 | **program** | a function that looks at an incoming write and says "this should be stored at URI X" or "this should also trigger Y". It does not write anything itself. |
 | **handler** | a function that takes the instruction a program emitted and produces the actual `[uri, payload]` to store or send |
 
