@@ -10,7 +10,7 @@
 
 set -u
 
-log() { printf '[b3nd-mcp] %s\n' "$*" >&2; }
+log() { printf '[pip-rig] %s\n' "$*" >&2; }
 
 if ! command -v bnd >/dev/null 2>&1; then
   log "the \`bnd\` CLI is not on PATH."

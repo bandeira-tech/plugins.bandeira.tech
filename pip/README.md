@@ -6,7 +6,7 @@ The plugin gives the user **their own rig** running as an MCP server, plus the s
 
 ## What you get
 
-- **MCP server `b3nd`** — wraps `bnd node --mcp` against the user's active rig target. The MCP surface is the standard b3nd tools (`b3nd_receive`, `b3nd_read`, `b3nd_status`); the skill teaches how to drive them.
+- **MCP server `pip-rig`** — wraps `bnd node --mcp` against the user's active rig target. The MCP surface is the standard b3nd tools (`b3nd_receive`, `b3nd_read`, `b3nd_status`); the skill teaches how to drive them.
 - **Skill `b3nd`** — what B3nd is, why it looks the way it does, and how to think in URIs / programs / handlers. Friendly door at `START.md`; deep files for each piece. Pre-1.0 etiquette and a relay protocol that keeps Claude honest about current APIs.
 - **Slash commands** (`pip:` namespace):
   - `/pip:install` — set up the `bnd` CLI if it isn't already.
