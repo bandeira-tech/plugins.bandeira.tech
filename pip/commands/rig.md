@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 A **rig** is the user's personal data graph: a set of `connection`s (each one is a `ProtocolInterfaceNode` plus the URI patterns it owns) wired into `routes` for `send` / `receive` / `read` / `observe`.
 
-This command edits the rig module of the **active target** (see `/b3nd:targets`). Most actions are surgical edits to a TypeScript file.
+This command edits the rig module of the **active target** (see `/pip:targets`). Most actions are surgical edits to a TypeScript file.
 
 ## Preflight
 
@@ -39,7 +39,7 @@ This command edits the rig module of the **active target** (see `/b3nd:targets`)
 - Run `deno check <rig>` and report any errors. Don't try to "auto-fix" — surface to the user.
 
 ### `add-program <uri-scheme>`
-- Programs are protocol-side, not rig-side. Redirect the user: "Programs live in a protocol module, not the rig. Use `/b3nd:program` to scaffold one, then mount it via the protocol's installer (or via `connection(...)` if the protocol exposes an in-process node)."
+- Programs are protocol-side, not rig-side. Redirect the user: "Programs live in a protocol module, not the rig. Use `/pip:program` to scaffold one, then mount it via the protocol's installer (or via `connection(...)` if the protocol exposes an in-process node)."
 
 ## What a rig is *not*
 

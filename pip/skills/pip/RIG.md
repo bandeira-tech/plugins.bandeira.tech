@@ -110,7 +110,7 @@ That rig sends drafts to disk, posts and comments to the shared node, and binary
 
 Plain: adding rules lives in the protocol module, not the wiring.
 
-Programs and handlers live in **protocol modules**. The rig wires a protocol's connection into routes; it doesn't host its logic. If the user reaches for `/b3nd:rig add-program`, redirect them: use `/b3nd:program` inside the relevant protocol module, then make sure a connection owns the URI scheme the protocol uses.
+Programs and handlers live in **protocol modules**. The rig wires a protocol's connection into routes; it doesn't host its logic. If the user reaches for `/pip:rig add-program`, redirect them: use `/pip:program` inside the relevant protocol module, then make sure a connection owns the URI scheme the protocol uses.
 
 The point of the split: a protocol module can be imported by the rig (in-process), by a remote node (over HTTP), or by a browser tab (over WS or in-browser stores) — *unchanged*. Folding it into the rig file kills that portability.
 
@@ -156,7 +156,7 @@ Plain: ask the rig what it thinks it is, then trust that view as your first diag
 - "I can read but my UI doesn't refresh" → connection likely wired in `read` but not `observe`.
 - "Everything is slow" → a remote connection may be timing out; status often surfaces it.
 
-When the user runs `/b3nd:rig status`, that's the call.
+When the user runs `/pip:rig status`, that's the call.
 
 ## Targeting — which rig is active
 
@@ -178,7 +178,7 @@ rig = "https://testnet-evergreen.fire.cat"
 rig = "/Users/me/work/journal/prod.rig.ts"
 ```
 
-`/b3nd:targets` manages this file. The MCP server reads `active` at session start and runs `bnd node --mcp --rig <that>`. Switching targets at runtime requires reconnecting the MCP (restart Claude Code, or trigger MCP reconnect).
+`/pip:targets` manages this file. The MCP server reads `active` at session start and runs `bnd node --mcp --rig <that>`. Switching targets at runtime requires reconnecting the MCP (restart Claude Code, or trigger MCP reconnect).
 
 ## What does *not* belong in the rig
 

@@ -34,7 +34,7 @@ Programs are **not** handlers. Handlers turn codes into effects (writes, emits).
    - If not, leave a comment in the new file explaining where it should be registered, and tell the user.
 
 5. **Mention handlers.**
-   Programs without handlers are useless. After scaffolding, tell the user which handlers (`/b3nd:handler`) they will need to write next to actually realize the codes this program emits.
+   Programs without handlers are useless. After scaffolding, tell the user which handlers (`/pip:handler`) they will need to write next to actually realize the codes this program emits.
 
 ## What goes wrong
 

@@ -1,3 +1,17 @@
+---
+name: learn
+description: |
+  Use when the user wants to understand or learn B3nd as a developer —
+  what it is, why it looks the way it does, and how to think in it.
+  Triggers: the user asks "what is b3nd", mentions b3nd / bnd / b3nd-core
+  / b3nd-move / b3nd-save / BANDEIRA·TECH and wants the concepts (not to
+  run a rig); asks how Protocol Interface Nodes (PINs), Outputs, URIs,
+  programs, or handlers fit together; is evaluating B3nd or comparing it
+  to service-oriented architecture. Knowledge only — this plugin does
+  not host a rig or ship an MCP server. To actually run and manage a rig
+  node, use the `pip` plugin.
+---
+
 # B3nd - learn how to think in this new architecture
 
 B3nd is a software application development framework designed to

@@ -8,7 +8,7 @@ A b3nd app is **not** a service. Don't reach for endpoints, controllers, or "the
 
 You wire it into the user's rig and you're done. There is no server to deploy. There is no database to provision. There is no client/server split at the protocol layer — one protocol module runs on both sides.
 
-This file is the briefing for `/b3nd:new-app`. It also covers what to do when the user shows up wanting "an app" but hasn't yet figured out what shape it has.
+This file is the briefing for `/pip:new-app`. It also covers what to do when the user shows up wanting "an app" but hasn't yet figured out what shape it has.
 
 ## Before any scaffolding — the URI table
 
@@ -31,9 +31,9 @@ Don't move on until the URI table is on disk and the user has eyeballed it.
 
 ## Reading the rig
 
-Confirm the active rig target (`/b3nd:targets show`). Two questions to answer before you scaffold protocol code:
+Confirm the active rig target (`/pip:targets show`). Two questions to answer before you scaffold protocol code:
 
-- **Does any current connection own the app's URI scheme?** If yes, you'll attach the protocol there. If no, the user will need to add one (`/b3nd:rig add-connection`) at the end — note this and continue.
+- **Does any current connection own the app's URI scheme?** If yes, you'll attach the protocol there. If no, the user will need to add one (`/pip:rig add-connection`) at the end — note this and continue.
 - **Do you need new storage?** If the app's data shape suggests a backend not currently in the rig (e.g. content-addressed blobs → S3 or IPFS), surface that *now* so the rig grows alongside the app, not after.
 
 ## Programs and handlers — one per input class
@@ -42,8 +42,8 @@ For each thing the user can submit (one post, one expense, one reading), there i
 
 Use the dedicated commands so the patterns stay consistent:
 
-- `/b3nd:program <protocol-dir> <name>` per input.
-- `/b3nd:handler <protocol-dir> <name>` per code kind.
+- `/pip:program <protocol-dir> <name>` per input.
+- `/pip:handler <protocol-dir> <name>` per code kind.
 
 Resist the urge to generate them all at once. After the URI table, walk one input end-to-end: program → handler → output URIs match the table. The user sees one full path land cleanly. Then do the rest.
 
@@ -83,7 +83,7 @@ For a deeper UI, follow the user's lead. The baseline page is enough to prove th
 
 Either guide the user or (with confirmation) do it yourself:
 
-1. `/b3nd:rig add-connection <name> <store-or-url> "<app-scheme>://**"` — make sure a connection owns the URI scheme.
+1. `/pip:rig add-connection <name> <store-or-url> "<app-scheme>://**"` — make sure a connection owns the URI scheme.
 2. In the rig file, call the protocol module's installer with that connection so its programs and handlers register on the right routes.
 3. `bnd status` — confirm the protocol shows up in the rig's manifest with the right patterns.
 

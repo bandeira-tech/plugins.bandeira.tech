@@ -56,8 +56,8 @@ There's a longer version of this argument in [ARCHITECTURE.md](./ARCHITECTURE.md
 
 ## Where to go from here
 
-- "How do I install this and get a rig running?" → `/b3nd:install`, then `/b3nd:targets` to pick or add a target.
-- "Help me build my first app." → `/b3nd:new-app`. The command walks the whole thing.
+- "How do I install this and get a rig running?" → `/pip:install`, then `/pip:targets` to pick or add a target.
+- "Help me build my first app." → `/pip:new-app`. The command walks the whole thing.
 - "I want the architecture pitch in detail." → ARCHITECTURE.md.
 - "I want the package list and current API surface." → TARGETS.md.
 

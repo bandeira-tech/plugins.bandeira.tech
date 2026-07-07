@@ -1,5 +1,5 @@
 ---
-name: b3nd
+name: pip
 description: |
   Use when the user is building with B3nd or wants to. Triggers: the user
   mentions b3nd, bnd, b3nd-core, b3nd-move, b3nd-save, or BANDEIRA·TECH;
@@ -13,7 +13,7 @@ description: |
   browser, or as MCP; wants to design a protocol other apps can
   compose on; wants to run a node, a rig, or join a DePIN.
 
-  Companion to the `b3nd` Claude Code plugin. The plugin ships an MCP
+  Companion to the `pip` Claude Code plugin. The plugin ships an MCP
   server that wraps the `bnd` CLI against the user's active rig target;
   this skill teaches the shape of the framework and how to think in it.
 
@@ -30,11 +30,11 @@ description: |
     how multi-target works in this plugin. Read when the user wants to
     add a connection, switch targets, or understand `bnd status`.
   - APP.md — building an app end to end: URI scheme → program →
-    handler → UI. Read at the start of `/b3nd:new-app`.
+    handler → UI. Read at the start of `/pip:new-app`.
   - PROGRAMS.md — designing programs (classifiers → codes). Read at
-    `/b3nd:program`.
+    `/pip:program`.
   - HANDLERS.md — designing code handlers (codes → outputs). Read at
-    `/b3nd:handler`.
+    `/pip:handler`.
   - CANON.md — canonical forms: envelopes, `hash://` content
     addressing, RFC 8785 canonicalization, encryption. Read when the
     user touches payload shapes or asks "how do I sign / encrypt /
@@ -99,12 +99,12 @@ The narrative in these files is stable. The function signatures are not. Treat a
 
 When the user runs one of these, the matching file is the briefing:
 
-- `/b3nd:install` → README of `b3nd-cli`, plus this file for context on why bnd exists.
-- `/b3nd:targets` → RIG.md (last section on multi-target).
-- `/b3nd:rig` → RIG.md.
-- `/b3nd:program` → PROGRAMS.md.
-- `/b3nd:handler` → HANDLERS.md.
-- `/b3nd:new-app` → APP.md (the whole walk).
+- `/pip:install` → README of `b3nd-cli`, plus this file for context on why bnd exists.
+- `/pip:targets` → RIG.md (last section on multi-target).
+- `/pip:rig` → RIG.md.
+- `/pip:program` → PROGRAMS.md.
+- `/pip:handler` → HANDLERS.md.
+- `/pip:new-app` → APP.md (the whole walk).
 
 ## Voice
 

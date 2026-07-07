@@ -10,7 +10,12 @@
     {
       "name": "b3nd",
       "source": "./b3nd",
-      "description": "Build with B3nd — your own rig, your own data, apps as URI shapes + on-the-fly UI. Wraps the `bnd` CLI as an MCP server."
+      "description": "Learn and develop with B3nd — the shape of the framework and how to think in URIs / programs / handlers. Knowledge only; no rig or MCP."
+    },
+    {
+      "name": "pip",
+      "source": "./pip",
+      "description": "Curate your personal information platform — host and grow a B3nd rig node as MCP, manage targets, and scaffold apps via the `bnd` CLI."
     }
   ]
 }

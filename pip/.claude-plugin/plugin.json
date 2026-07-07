@@ -1,7 +1,7 @@
 {
-  "name": "b3nd",
+  "name": "pip",
   "version": "0.1.0",
-  "description": "Build with B3nd — own your data, ship apps as URI shapes + on-the-fly UI. Hosts your rig as MCP via the `bnd` CLI.",
+  "description": "Curate your personal information platform — host and grow a B3nd rig node as MCP, manage targets, and scaffold apps as URI shapes + on-the-fly UI via the `bnd` CLI.",
   "author": {
     "name": "Bandeira Tech",
     "url": "https://github.com/bandeira-tech"
@@ -10,6 +10,8 @@
   "repository": "https://github.com/bandeira-tech/plugins.bandeira.tech",
   "license": "MIT",
   "keywords": [
+    "pip",
+    "personal-information-platform",
     "b3nd",
     "bandeira-tech",
     "depin",

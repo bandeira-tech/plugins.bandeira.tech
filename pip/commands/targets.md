@@ -31,7 +31,7 @@ description = "Firecat testnet"
 Parse `$ARGUMENTS`. If empty, default to `list`.
 
 ### `list`
-- Read `~/.bnd/targets.toml`. If missing, print "No targets yet. Add one with `/b3nd:targets add <name> <rig>`."
+- Read `~/.bnd/targets.toml`. If missing, print "No targets yet. Add one with `/pip:targets add <name> <rig>`."
 - Print each target as `name → rig` (active one prefixed with `*`).
 
 ### `add <name> <rig>`

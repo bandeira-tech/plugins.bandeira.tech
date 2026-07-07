@@ -16,7 +16,7 @@ This command walks the full flow. Don't skip steps to "just scaffold something" 
 
 ## 0. Preflight
 
-- Confirm the active rig target with `/b3nd:targets`. The app's protocol will need at least one connection that owns its URI scheme. Note this; we'll wire it up at the end.
+- Confirm the active rig target with `/pip:targets`. The app's protocol will need at least one connection that owns its URI scheme. Note this; we'll wire it up at the end.
 - Read the b3nd skill files (`SKILL.md`, `APP.md`, `RIG.md`) so your suggestions match the framework's current shape. Verify package versions per TARGETS.md before generating any code.
 
 ## 1. Pick the URI scheme — talk to the user
@@ -32,11 +32,11 @@ The output of this step is a written URI table — every concrete URI pattern th
 
 ## 2. Programs
 
-For each ingest path (each thing the user can write), call `/b3nd:program` (or follow its steps inline): one program per input class. Programs classify, emit codes.
+For each ingest path (each thing the user can write), call `/pip:program` (or follow its steps inline): one program per input class. Programs classify, emit codes.
 
 ## 3. Handlers
 
-For each code emitted by step 2, call `/b3nd:handler`: one handler per code kind. Handlers turn codes into `[uri, payload]` outputs.
+For each code emitted by step 2, call `/pip:handler`: one handler per code kind. Handlers turn codes into `[uri, payload]` outputs.
 
 ## 4. Protocol module
 
@@ -62,7 +62,7 @@ Scaffold:
 ## 6. Wire into the rig
 
 Tell the user the last step is theirs (or run it on confirmation):
-- Add a connection in the active rig that owns the app's URI scheme (`/b3nd:rig add-connection`).
+- Add a connection in the active rig that owns the app's URI scheme (`/pip:rig add-connection`).
 - Mount the protocol's installer on that connection.
 - `bnd status` to confirm.
 

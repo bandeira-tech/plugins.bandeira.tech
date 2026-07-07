@@ -14,7 +14,7 @@ log() { printf '[b3nd-mcp] %s\n' "$*" >&2; }
 
 if ! command -v bnd >/dev/null 2>&1; then
   log "the \`bnd\` CLI is not on PATH."
-  log "run the /b3nd:install slash command to set it up, or install manually:"
+  log "run the /pip:install slash command to set it up, or install manually:"
   log "  deno install --global -A -n bnd jsr:@bandeira-tech/b3nd-cli"
   exit 127
 fi

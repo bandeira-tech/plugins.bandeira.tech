@@ -12,7 +12,7 @@ If your "handler" calls `fetch`, opens a file, or talks to a DB directly, you've
 
 ## Inputs
 
-- `<protocol-dir>` — protocol module dir (must already exist; create via `/b3nd:new-app` or by hand if missing).
+- `<protocol-dir>` — protocol module dir (must already exist; create via `/pip:new-app` or by hand if missing).
 - `<handler-name>` — kebab-case. Usually matches the code kind it handles, e.g. `store-post` for code `{ kind: "store-post", ... }`.
 
 ## Steps

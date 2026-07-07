@@ -28,7 +28,7 @@ The b3nd plugin's MCP server is a wrapper around `bnd node --mcp`. If `bnd` is n
    - If status reports errors, briefly explain what likely needs fixing (rig file missing, connection unreachable) but don't try to fix them — that's the user's call.
 
 5. **Next step prompt**
-   Tell the user: "Your `bnd` is ready. Add or pick a rig target with `/b3nd:targets`, then restart Claude Code so the MCP server picks it up."
+   Tell the user: "Your `bnd` is ready. Add or pick a rig target with `/pip:targets`, then restart Claude Code so the MCP server picks it up."
 
 ## Notes
 
