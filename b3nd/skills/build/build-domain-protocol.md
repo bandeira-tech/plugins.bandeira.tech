@@ -61,7 +61,7 @@ import type { Program, ReadFn } from "@bandeira-tech/b3nd-core";
 // Program = (output, upstream, read) => Promise<{ code, error? }>
 // pure classifier: reads confirmed state, returns a protocol code
 export const classifyPlaced: Program<Placed> = async ([uri, payload], _up, read) => {
-  const id = idOf(uri);
+  const id = idOf(uri); // idOf/baseOf: recover id + mount from the uri (cf. parseUrl, build-data-protocol.md)
   const [, prior] = await read(uris(baseOf(uri)).draft(id)); // ReadFn: read([loc])[0]
   if (!prior)                    return { code: "no-draft", error: "nothing to place" };
   if (payload.items.length === 0) return { code: "empty" };
@@ -89,7 +89,7 @@ export const onPlaced: Record<string, CodeHandler> = {
 ### Ship it — the domain as a mountable package, over a generic data node
 
 ```ts
-import type { Output, ReceiveResult } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core";
 
 // a domain = uris + payload types + programs + handlers + operator commitments.
 // nothing here names HTTP, a DB, or a rig — mount it on any data PIN.
@@ -108,7 +108,7 @@ export const orderDomain = (base: string) => ({
 
 // mounting = pointing the domain's outputs at a data node at a chosen base.
 // `node` is any ProtocolInterfaceNode (memory, HTTP, store — the data layer).
-export const mount = (node: { receive: (m: Output[]) => Promise<ReceiveResult[]> }) => {
+export const mount = (node: ProtocolInterfaceNode) => {
   const domain = orderDomain("mutable://acme");
   return {
     place: (id: string, d: Draft) => node.receive(placeOrder("mutable://acme", id, d)),

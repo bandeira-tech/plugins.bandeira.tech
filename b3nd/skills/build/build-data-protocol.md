@@ -12,7 +12,7 @@ object lifecycle/semantics live in `build-domain-protocol.md`, not here.)
 ```ts
 // A protocol is a set of uri templates over an injectable mount.
 // Never hardcode the scheme root — let the operator mount you.
-type Mount = string; // e.g. "mutable://app" or "b3nd://tenant/42"
+type Mount = string; // e.g. "mutable://app", "immutable://app", or "b3nd://tenant/42"
 
 const uris = (base: Mount) => ({
   // identity + index frontloaded so the path itself is a query surface

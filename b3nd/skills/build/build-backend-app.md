@@ -7,7 +7,8 @@ client (browser, CLI, other backends) reaches the same PIN surface either way.
 ### storage client — `SaveClient` turns an `EntityStore` into a PIN
 
 ```ts
-import { SaveClient, mapToBytes, BYTES_ENTITY } from "@bandeira-tech/b3nd-save/clients";
+import { SaveClient, mapToBytes } from "@bandeira-tech/b3nd-save/clients";
+import { BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
 import { MemoryStore } from "@bandeira-tech/b3nd-save/memory";
 // backends are interchangeable: swap for SqliteStore, PostgresStore, ... same client
 // import { SqliteStore } from "@bandeira-tech/b3nd-save/sqlite";
@@ -16,9 +17,10 @@ const store = new MemoryStore();
 // provision the entity once before serving (no lifecycle hook on the client)
 await store.provisionEntity(store.entitySupport(BYTES_ENTITY));
 
-// SaveClient(mapper, targetSchema, store) — "receive payloads, map as bytes, save on store"
+// SaveClient(mapper, targetSchema, store) — the mapper is your seam:
+// mapToBytes = opaque bytes; or your own SaveMapper<T> to encode a typed record
+// into BYTES_ENTITY (see k3p's clipToBytes); or passThroughRecord + a custom schema.
 const backend = new SaveClient(mapToBytes, BYTES_ENTITY, store);
-// for already-shaped records: new SaveClient(passThroughRecord, mySchema, store)
 ```
 
 ### rig — wire the storage client into `routes`; add domain logic as needed
@@ -31,6 +33,9 @@ const c = connection(backend, ["mutable://**", "hash://**"]);
 
 const rig = new Rig({
   routes: { receive: [c], read: [c], observe: [c] },
+  // a served rig is exposed to the network — gate writes with a beforeReceive
+  // hook for auth (throw to reject; see build-error-handling.md):
+  hooks: { beforeReceive: (ctx) => {/* verify ctx.uri / ctx.data */} },
   // domain services live here — see build-error-handling.md for the full grammar:
   programs:  { "store://balance": /* classify */ myProgram },
   handlers:  { "app:valid": async (out) => [out] },
@@ -44,6 +49,7 @@ const rig = new Rig({
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
 import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
 
+// run: deno run --allow-net server.ts
 Deno.serve({ port: 3000 }, httpApi(rig, { codec: httpOutputsFrame() }));
 // cross-origin browsers: wrap with withCors from "@bandeira-tech/b3nd-move/cors"
 ```

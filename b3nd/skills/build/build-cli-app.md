@@ -8,7 +8,8 @@ same command set runs against a local store today and a remote target later.
 
 ```ts
 // SaveClient(mapper, entity, store) → a ProtocolInterfaceNode (receive/read/observe/status).
-// mapToBytes + BYTES_ENTITY = opaque-payload store; swap the mapper/entity to shape records.
+// the mapper is your seam: mapToBytes = opaque bytes, or your own SaveMapper<T> to
+// encode a typed record into BYTES_ENTITY (see k3p's clipToBytes).
 import { SaveClient, mapToBytes } from "@bandeira-tech/b3nd-save/clients";
 import { BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
 
@@ -40,6 +41,7 @@ const denoFs: FsExecutor = {
     try { for await (const e of Deno.readDir(dir)) if (e.isFile) out.push(e.name); } catch { /* empty */ }
     return out;
   },
+  // walkFiles is only needed for deep `?fn=find`; omit it if you only `?fn=ls` (like k3p)
   walkFiles: async function* (dir) {
     try {
       for await (const e of walk(dir, { includeDirs: false, includeFiles: true }))
@@ -91,8 +93,8 @@ async function add(node, id: string, text: string) {
 
 // query one: `myapp get <id>`  → read (bare URI, no ?fn=)
 async function get(node, id: string) {
-  const [hit] = await node.read([`mutable://notes/${id}`]);
-  return hit ? dec.decode(hit[1] as Uint8Array) : undefined;
+  const [hit] = await node.read([`mutable://notes/${id}`]); // read is 1:1 — tuple always present
+  return hit?.[1] != null ? dec.decode(hit[1] as Uint8Array) : undefined; // check payload, not tuple
 }
 
 // list: `myapp ls`  → read with the ls grammar (wildcards REQUIRE explicit ?fn=)
@@ -115,19 +117,24 @@ async function watch(node) {
   const abort = new AbortController();
   Deno.addSignalListener("SIGINT", () => abort.abort());
   for await (const uris of node.observe(["mutable://notes/**"], abort.signal))
-    for (const [uri, payload] of await node.read([...uris])) render(uri, payload);
+    for (const [uri, payload] of await node.read([...uris])) render(uri, payload); // render(): your output
 }
 ```
 
 ### Pluggable — swap the store, command code is untouched
 
 ```ts
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+
 // One factory picks the backend; handlers only ever see a PIN.
+const dir = `${Deno.env.get("HOME")}/.myapp/data`;
 async function backend(kind: "fs" | "sqlite" | "remote") {
   switch (kind) {
     case "fs":     return openStore(new FsStore(dir, denoFs));
     case "sqlite": return openStore(new SqliteStore("myapp", sqlite));
-    case "remote": return new HttpClient({ url: myUrl }); // already a PIN; no store, no provision
+    // codec must match the server's (see build-web-app.md); already a PIN, no provision
+    case "remote": return new HttpClient({ url: myUrl, codec: httpOutputsFrame() });
   }
 }
 const node = await backend(Deno.env.get("MYAPP_STORE") ?? "fs");
@@ -142,7 +149,7 @@ import { connection, Rig } from "jsr:@bandeira-tech/b3nd-core@^0.24.0/rig";
 export default async () => {
   const node = await openStore(new FsStore(`${Deno.env.get("HOME")}/.myapp/data`, denoFs));
   const all = connection(node, ["mutable://**"]);
-  return new Rig({ routes: { send: [all], receive: [all], read: [all], observe: [all] } });
+  return new Rig({ routes: { receive: [all], read: [all], observe: [all] } });
 };
 ```
 
@@ -152,5 +159,5 @@ echo '["mutable://notes/1", "hello"]' | bnd receive -   # write
 bnd read 'mutable://notes/1'                             # query one
 bnd read 'mutable://notes/*?fn=ls&format=uris'           # list
 bnd observe 'mutable://notes/**'                         # watch
-bnd node --http --mcp                                    # same rig, now a server/MCP endpoint
+bnd node --http --mcp-http                               # same rig as HTTP + MCP-over-HTTP endpoints
 ```

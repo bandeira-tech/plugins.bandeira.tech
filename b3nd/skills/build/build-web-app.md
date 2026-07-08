@@ -64,7 +64,7 @@ const app = mountApp(makeRig(backend)); // ships with zero server
 ```ts
 import { IndexedDBStore } from "@bandeira-tech/b3nd-save/indexeddb";
 
-const store = new IndexedDBStore(/* { dbName } */);
+const store = new IndexedDBStore(/* { databaseName } */);
 await store.provisionEntity(store.entitySupport(BYTES_ENTITY));
 const backend = new SaveClient(mapToBytes, BYTES_ENTITY, store);
 ```
@@ -77,7 +77,7 @@ const backend = new SaveClient(mapToBytes, BYTES_ENTITY, store);
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
 
-// same codec the server passed to httpApi(rig, { codec })
+// same codec the server passed to httpApi(rig, { codec }) — server side: build-backend-app.md
 const backend = new HttpClient({
   url: "https://my-b3nd-server.example",
   codec: httpOutputsFrame(),
@@ -108,4 +108,12 @@ const backend = new SaveClient(mapToBytes, BYTES_ENTITY, new LocalStorageStore()
 const backend = new HttpClient({ url: myUrl, codec: httpOutputsFrame() });
 
 // identical either way — makeRig(backend), mountApp(rig), every pin.receive/read/observe call
+```
+
+### Browser packaging — one bundle for core + local store + transports
+
+```ts
+// @bandeira-tech/b3nd-web bundles core (Rig/connection), LocalStorageStore/MemoryStore,
+// and HttpClient/WebSocketClient in one import. SaveClient/mapToBytes/BYTES_ENTITY (and
+// IndexedDBStore) still come from @bandeira-tech/b3nd-save subpaths.
 ```
