@@ -80,9 +80,15 @@ $(cat "$TASK_FILE")
 
 ---
 
+## Run instructions
+
 Your workspace for this run is: $RUN_DIR
 Write all outputs to: $RUN_DIR/outputs/
 Close with a result.md at: $RUN_DIR/result.md
+
+You have full tool access (file write, bash). Use them freely.
+Verify your code actually runs — don't just write it and stop.
+You can use \`deno run -A\` to test scripts in your outputs/ dir.
 
 result.md format:
   status: DONE | DONE_WITH_CONCERNS | BLOCKED
@@ -97,5 +103,6 @@ echo ""
 claude \
   --plugin-dir "$RUN_DIR/plugin" \
   --model "$MODEL" \
+  --dangerously-skip-permissions \
   -p "$(cat "$RUN_DIR/task.md")" \
   2>&1 | tee "$RUN_DIR/outputs/stdout.txt"
