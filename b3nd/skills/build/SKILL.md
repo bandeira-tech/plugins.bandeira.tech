@@ -45,6 +45,8 @@ Begin a new application on B3nd, local-first, and switch infrastructure later.
   and/or MCP using a rig that handles and reacts to received data.
 - **Build a Data Protocol** — design and package the URI structures, payload
   types, classifications, validations, and handling that support your PINs.
+- **Build a Domain Protocol** — design and package the URI structures, payload
+  types, classifications, validations, and handling that support your PINs.
 
 > Start-fresh guides are in progress. Until each has its own page, use `learn`
 > for the concepts and follow RULE 0 to read the current source for mechanics.
