@@ -92,6 +92,10 @@ runPinContract(makeMemoryPin);
 ### MemoryStore for fast unit tests vs. real backend for truth
 
 ```ts
+import { SaveClient, mapToBytes } from "@bandeira-tech/b3nd-save/clients";
+import { MemoryStore } from "@bandeira-tech/b3nd-save/memory";
+import { BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
+
 // MemoryStore: zero setup, synchronous semantics — iterate quickly on business logic.
 const mem = new MemoryStore();
 await mem.provisionEntity(mem.entitySupport(BYTES_ENTITY));
