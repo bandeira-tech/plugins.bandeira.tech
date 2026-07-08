@@ -1,42 +1,24 @@
 # Build Error Handling for B3nd PINs to deliver the experience you need
 
-B3nd PIN interface and the return types and throw expectations should provide
-all affordances you need to build the right error handling for your operations.
+The PIN return types and throw expectations carry every affordance you need to build the error handling your operations require. Read the code; wire your own policy.
 
 ## Handling errors on Protocol Interface Node API
 
-The PIN interface splits errors two ways. **`receive` returns problems as
-data** — one result per message. **`read` / `observe` / `status` throw** for
-transport and programmer errors; anything domain-level ("not found", auth
-refusal) is encoded in the payload per the client's convention, never thrown.
+`receive` returns problems as data (one `ReceiveResult` per message). `read` / `observe` / `status` throw transport/programmer errors and encode domain outcomes in the payload.
 
-The structured pieces you'll use:
+### import — the structured error surface
 
 ```ts
 import {
-  type B3ndError,
+  type B3ndError, // { code, message, uri?, details? }
   ClientError,
-  ErrorCode, // enum: UNAUTHORIZED, FORBIDDEN, INVALID_URI, INVALID_SCHEMA,
-  //         INVALID_SEQUENCE, NOT_FOUND, CONFLICT, STORAGE_ERROR, INTERNAL_ERROR
-  Errors, // convenience constructors: Errors.notFound(uri), Errors.forbidden(uri), ...
+  ErrorCode, // UNAUTHORIZED FORBIDDEN INVALID_URI INVALID_SCHEMA INVALID_SEQUENCE NOT_FOUND CONFLICT STORAGE_ERROR INTERNAL_ERROR
+  Errors, // constructors: Errors.notFound(uri), Errors.forbidden(uri), ...
   type ReceiveResult,
 } from "@bandeira-tech/b3nd-core";
 ```
 
-### receive — errors are returned, not thrown
-
-`receive(msgs)` resolves to one `ReceiveResult` per input message, in order:
-
-```ts
-interface ReceiveResult {
-  accepted: boolean;
-  error?: string; // human string (kept for compatibility)
-  errorDetail?: B3ndError; // structured: { code, message, uri?, details? }
-}
-```
-
-A message can be rejected without the whole batch failing — inspect each
-result. Prefer `errorDetail.code` (an `ErrorCode`) over parsing the string:
+### receive — errors returned per message, not thrown
 
 ```ts
 const results = await node.receive([
@@ -46,23 +28,19 @@ const results = await node.receive([
 
 for (const r of results) {
   if (r.accepted) continue;
-  switch (r.errorDetail?.code) {
+  switch (r.errorDetail?.code) { // prefer the code over parsing r.error
     case ErrorCode.UNAUTHORIZED:
     case ErrorCode.FORBIDDEN:
-      // caller lacks rights for this uri
-      break;
+      /* caller lacks rights for this uri */ break;
     case ErrorCode.CONFLICT:
-      // e.g. sequence/version clash — retry with fresh state
-      break;
+      /* sequence/version clash — retry with fresh state */ break;
     default:
       console.error(r.error ?? "rejected");
   }
 }
 ```
 
-When you author a node, populate both fields so callers can choose their
-level: set `error` to a string and build `errorDetail` with an `Errors`
-constructor.
+### receive (authoring) — populate both fields so callers pick their level
 
 ```ts
 receive: (msgs) =>
@@ -75,43 +53,26 @@ receive: (msgs) =>
   })),
 ```
 
-### read — throws transport/programmer errors, encodes the rest
-
-`read(locators)` is 1:1 with input and returns `Output<T>[]`. The interface
-contract is explicit: **transport / programmer errors throw** (network down,
-no route accepts a locator, a grammar violation the client rejects).
-Everything domain-level is in the payload, on the client's terms — a miss
-might be an absent entry, or a present `[locator, undefined]`, or a
-`[locator, { error: ... }]`. That convention is agreed out-of-band, so read
-the target client's contract; don't assume.
+### read — throws transport/programmer errors; a miss is data
 
 ```ts
 try {
   const outs = await node.read(["mutable://users/alice"]);
   const hit = outs.find(([loc]) => loc === "mutable://users/alice");
   if (!hit) {
-    // this node's convention: miss = absent Output
+    /* this node's convention: miss = absent Output */
   } else {
     const [, payload] = hit;
     // interpret payload per the client's contract (may itself carry a miss/error shape)
   }
 } catch (err) {
-  // transport or programmer error — no route, network, bad grammar
+  // transport / programmer error — no route, network, bad grammar
   if (err instanceof ClientError) console.error(err.code, err.message);
   throw err;
 }
 ```
 
-Because absence and error are distinct here — a miss is *data*, a broken
-route is a *throw* — never treat an empty result as failure.
-
-### observe — throws on setup, then a long-lived stream
-
-`observe(locators, signal)` returns an `AsyncIterable<readonly string[]>`.
-Setup problems (no route accepts the pattern, transport unavailable) surface
-as a throw when you start iterating — wrap the `for await`. The stream itself
-yields batches of concrete uris that changed; it carries no error channel of
-its own. Stop it by aborting the signal, and use `finally` to clean up.
+### observe — throws on setup; stream carries no error channel
 
 ```ts
 const abort = new AbortController();
@@ -121,45 +82,29 @@ try {
     for (const [uri, payload] of outs) handle(uri, payload);
   }
 } catch (err) {
-  // subscription/transport failure
-  console.error("observe failed", err);
+  console.error("observe setup/transport failed", err); // re-subscribe for resilience
 } finally {
   abort.abort();
 }
 ```
 
-A dropped connection on a transport-backed node surfaces as the iterator
-throwing; re-subscribe if you need resilience.
-
-### status — throws only on transport failure
-
-`status()` resolves to a `StatusResult` and is the health probe itself, so
-degraded/unhealthy states are **not** errors — they're the return value.
-`status.status` is `"healthy" | "degraded" | "unhealthy"`; a `message` and
-per-verb `resources` may accompany it. A thrown error from `status()` means
-the node is unreachable (transport failure), which is strictly worse than an
-`"unhealthy"` result.
+### status — the probe itself; degraded/unhealthy is the return, not a throw
 
 ```ts
 try {
-  const s = await node.status();
+  const s = await node.status(); // "healthy" | "degraded" | "unhealthy"
   if (s.status !== "healthy") console.warn(s.status, s.message);
   // s.resources?.receive / .read / .observe → uri prefixes this node serves
 } catch {
-  // couldn't even reach the node — treat as fully down
+  // couldn't reach the node — strictly worse than "unhealthy"
 }
 ```
 
 ## Handling errors on B3nd Rig
 
-The Rig is itself a `ProtocolInterfaceNode`, so the PIN rules above still
-apply — but `send` and `receive` are richer. They return an
-`OperationHandle`, which is **both** an awaitable `PromiseLike<ReceiveResult[]>`
-and a scoped event emitter. A single write can fail at several distinct
-stages (before-hook, program, handler, per-route dispatch, reaction), and the
-Rig surfaces each differently. The rule of thumb: **stage rejections come back
-as `accepted: false` in the awaited results and as events; only a thrown hook
-turns the await itself into a rejection.**
+The Rig is a `ProtocolInterfaceNode`, so the PIN rules hold — but `send`/`receive` return an `OperationHandle` (awaitable `PromiseLike<ReceiveResult[]>` **and** a scoped emitter). Stage rejections come back as `accepted: false` and as events; only a thrown hook rejects the await itself.
+
+### import — the rig error surface
 
 ```ts
 import {
@@ -169,144 +114,161 @@ import {
 } from "@bandeira-tech/b3nd-core";
 ```
 
-### send / receive — awaited result vs. events vs. settled
+### send / receive — three outcome layers: ack vs. events vs. settled
 
 ```ts
 const op = rig.send([["mutable://app/state", { value: 42 }]]);
 
-const results = await op; // pipeline-stage ack: process + handle finished
+// 1. Pipeline ack — process + handle decided. Batch never throws here;
+//    a rejected tuple (incl. "No connection accepts receive for <uri>")
+//    is { accepted: false, error }; siblings still proceed.
+const results = await op;
 if (!results[0].accepted) console.error(results[0].error);
 
-await op.settled; // all background route dispatch has settled
+// 2. Per-route / per-stage events — dispatch runs in background AFTER the ack.
+op.on("process:error", (e) => log(e.input, e.error, e.errorDetail));
+op.on("handle:error", (e) => log(e.input, e.error, e.cause));
+op.on("route:error", (e) => retry(e.emission, e.connectionId, e.errorDetail));
+op.on("route:success", (e) => mark(e.emission, e.connectionId));
+op.on("reaction:error", (e) => log(e.pattern, e.error));
+
+// 3. Settled — every background route has answered (read-after-write).
+await op.settled; // rejects only if a hook threw
 ```
 
-Three layers of outcome, each with its own error surface:
-
-1. **Pipeline ack (`await op`).** Resolves to one `ReceiveResult` per input
-   tuple once `process` + `handle` decide what to dispatch. A tuple that is
-   rejected at process/handle time comes back `{ accepted: false, error }` —
-   the batch does **not** throw; other tuples still proceed. Structural misses
-   ("No connection accepts receive for `<uri>`") land here too, as
-   `accepted: false`.
-2. **Per-stage / per-route events (`op.on(...)`).** Dispatch to connections
-   runs in the background *after* the ack, so route outcomes only appear as
-   events:
-
-   ```ts
-   op.on("process:error", (e) => log(e.input, e.error, e.errorDetail));
-   op.on("handle:error", (e) => log(e.input, e.error, e.cause));
-   op.on("route:error", (e) =>
-     retry(e.emission, e.connectionId, e.errorDetail));
-   op.on("route:success", (e) => mark(e.emission, e.connectionId));
-   op.on("reaction:error", (e) => log(e.pattern, e.error));
-   ```
-
-   A per-route failure (a connection's `receive` returned `accepted: false`,
-   or its client threw) is reported as a `route:error` event, **not** by
-   rejecting the await — the pipeline already acked. Use `op.settled` (or
-   subscribe to `route:*`) if you need read-after-write across replicas.
-3. **The await rejects only when a hook throws.** A `beforeSend` /
-   `beforeReceive` throw, or an `onError` hook that re-throws, rejects the
-   pipeline promise — `await op` and `await op.settled` both reject with that
-   value.
-
-If you don't want to inspect `accepted`, use the throw-on-rejection
-convenience wrappers:
+### send / receive — throw-on-rejection convenience
 
 ```ts
 await rig.receiveOrThrow(outs); // throws on the first accepted:false tuple
 await rig.sendOrThrow(outs);
 ```
 
-### read — throws; emits read:error
+### read — throws on no-route/transport; emits read:error; miss is data
 
-`rig.read(locators)` routes each locator to the first connection that accepts
-it. It **throws** if no route accepts a locator (`No read route accepts <loc>`
-— a programmer/config error) or if the underlying client throws (transport).
-On throw it emits a `read:error` rig event per locator, then re-throws.
-Domain-level "not found" is not an error here — it rides in the payload, same
-as the bare-PIN contract. Wrap `read` in try/catch; treat absence as data.
+```ts
+try {
+  const outs = await rig.read(["mutable://users/alice"]);
+  // domain "not found" rides in the payload — treat absence as data
+} catch (err) {
+  // "No read route accepts <loc>" (config) or client threw (transport);
+  // rig emitted a read:error event per locator before re-throwing.
+  throw err;
+}
+```
 
-### observe — resilient stream; per-source errors are swallowed
+### observe — resilient merge; per-source errors are swallowed
 
-`rig.observe(locators, signal)` groups locators by accepting connection and
-merges their streams. By design **one broken source does not tear down the
-merged stream** — per-stream errors are swallowed internally so a single flaky
-peer can't kill your subscription. That means you won't get an exception when
-one upstream drops; you simply stop receiving its uris. If you need liveness
-guarantees, track them yourself (heartbeat uris, `status()` polling) rather
-than relying on the stream to throw. Abort the signal to stop; clean up in
-`finally`.
+```ts
+const abort = new AbortController();
+// One broken source does NOT tear down the merged stream — you simply
+// stop receiving its uris (no exception). Track liveness yourself if needed.
+for await (const uris of rig.observe(["mutable://app/**"], abort.signal)) {
+  for (const uri of uris) handle(uri);
+}
+abort.abort();
+```
 
-### status — aggregates, doesn't throw on degraded
+### status — aggregates; degraded/unhealthy is a value, not a throw
 
-`rig.status()` aggregates health across all connected clients: if any is
-`unhealthy` the rig reports `unhealthy`, else if any is `degraded` it reports
-`degraded`, else `healthy`. `resources` is derived from the rig's own route
-table (the per-verb connection patterns), not from downstream nodes. As with a
-bare PIN, a degraded/unhealthy *result* is not an error — a throw means a
-client's `status()` itself threw (unreachable).
+```ts
+const s = await rig.status();
+// any client unhealthy → "unhealthy"; else any degraded → "degraded"; else "healthy".
+// s.resources is derived from the rig's own route table, not downstream nodes.
+// A throw means a client's own status() threw (unreachable).
+```
 
-### Programs — classify; return an error to reject a tuple
+### Programs — return an error to reject a tuple; throws are isolated per-tuple
 
-A `Program` is a pure classifier returning `{ code, error? }`. If it returns
-an `error` string, the Rig rejects that tuple: `accepted: false`, a
-`process:error` event, and the `onError` hook fires with `phase: "process"`.
-If a program **throws**, the Rig isolates it per-tuple — the thrown message
-becomes that tuple's error; the rest of the batch is unaffected. So prefer
-returning a code/error for expected classification outcomes and reserve throws
-for genuine faults.
+```ts
+const rig = new Rig({
+  routes: { receive: [node] },
+  programs: {
+    "store://balance": async (out, _upstream, read) => {
+      if (/* your check */ false) {
+        return { code: "rejected", error: "insufficient funds" };
+        // → accepted:false, process:error event, onError phase:"process"
+      }
+      return { code: "ok" }; // reserve throws for genuine faults (isolated per-tuple)
+    },
+  },
+});
+```
 
-### Handlers — throwing rejects the tuple
+### Handlers — throwing rejects the tuple; `[]` refuses without error
 
-A `CodeHandler` returns the `Output[]` to dispatch. If it throws, the Rig
-catches it, emits `handle:error` (with `input`, `classification`, `error`,
-`cause`), records `accepted: false`, fires the `receive:error`/`send:error`
-event and the `onError` hook with `phase: "handle"`. It does not fail sibling
-tuples. Returning `[]` is a valid "refuse / observe-only" outcome, not an
-error.
+```ts
+const rig = new Rig({
+  routes: { receive: [node] },
+  handlers: {
+    "app:valid": async (out, _result, _read) => {
+      if (/* fault */ false) throw new Error("boom");
+      // → catches, emits handle:error {input,classification,error,cause},
+      //   accepted:false, receive:error/send:error event, onError phase:"handle"
+      return [out]; // return [] to refuse / observe-only — a valid outcome, not an error
+    },
+  },
+});
+```
 
-### Hooks — before throws to reject, after can throw, onError can abort
+### Hooks — before throws to reject; after can throw; onError can abort
 
-- **Before-hooks (`beforeSend`/`beforeReceive`/`beforeRead`) throw to reject.**
-  A throw here is the rejection mechanism — it rejects the pipeline promise
-  (`await op` rejects) for send/receive, and propagates out of `rig.read` for
-  reads. Return `void` to proceed, or `{ ctx }` to rewrite the tuple/locator.
-- **After-hooks observe** and cannot modify the result, but may throw to
-  enforce a post-condition (which propagates).
-- **`onError` hook** fires synchronously in the catch path for every
-  `process`/`handle`/`route`/`reaction` error. **Throw from it to abort** the
-  whole operation (rejects `await op` and `op.settled`, stops scheduling new
-  routes/reactions); **return** to let the rig continue with normal handling
-  (that tuple is `accepted: false`, the `*:error` event fires, siblings
-  proceed). Use it for fail-fast batch policies or to convert specific phases
-  into application exceptions. Its `ctx` carries `phase`, `input`, and
-  per-phase extras (`emission`, `connectionId`, `classification`, `pattern`,
-  `errorDetail`, `cause`).
+```ts
+const rig = new Rig({
+  routes: { receive: [node] },
+  hooks: {
+    // Before-hook: throw is the rejection mechanism (rejects await op / propagates out of rig.read).
+    beforeReceive: (ctx) => { if (!ok(ctx.uri)) throw new Error("denied"); },
+    // Return void to proceed; return { ctx } to rewrite the tuple/locator.
+    beforeSend: (ctx) => ({ ctx: { message: rewrite(ctx.message) } }),
+    // After-hook: observes, may throw to enforce a post-condition (propagates).
+    afterRead: (ctx, result) => { audit(ctx.url, result); },
+    // onError: fires in the catch path for every process/handle/route/reaction error.
+    onError: (ctx) => {
+      // ctx.phase, ctx.input, + per-phase extras: emission, connectionId,
+      //   classification, pattern, errorDetail, cause
+      if (ctx.phase === "route") return; // return → rig continues (accepted:false, *:error fires, siblings proceed)
+      throw new Error(`abort: ${ctx.error}`); // throw → rejects await op AND op.settled, stops scheduling new routes/reactions
+    },
+  },
+});
+```
 
 ### Events — fire-and-forget; handler errors never propagate
 
-Rig events (`send:success`, `receive:error`, `read:success`, the `*:success`/
-`*:error` wildcards) run asynchronously *after* the operation and never block
-or fail the caller. An error thrown inside an event handler is caught and
-routed to any `onHandlerError` listener, falling back to `console.warn` — it
-can never break the operation. Don't rely on event handlers for control flow;
-use hooks (which can reject) for that. `rig.drain()` returns in-flight handler
-promises if you need to await them before exit.
+```ts
+const rig = new Rig({
+  routes: { receive: [node] },
+  on: {
+    "send:success": [(e) => audit(e.uri)],
+    "receive:error": [(e) => alert(e.uri, e.error)],
+    "*:error": [(e) => metrics(e.op)], // wildcards fire for all ops
+  },
+});
+// A throw inside a handler is caught → onHandlerError listener, else console.warn.
+// It can never break the operation. Use hooks (not events) for control flow.
+rig.on("read:error", (e) => log(e.uri, e.error)); // runtime registration
+await Promise.allSettled(rig.drain()); // await in-flight handlers before exit
+```
 
 ### Reactions — observers, not blockers
 
-Reactions fire after an emission's routes settle (only if at least one route
-accepted). A reaction that **throws** is caught: the Rig emits `reaction:error`
-and fires `onError` with `phase: "reaction"`, but the triggering operation is
-unaffected. Reaction return tuples are dispatched through a **fresh**
-`rig.send` with its own handle; that spawned op's rejections are swallowed
-(logged via `console.warn`) — reactions are productive observers, never
-blockers of the operation that triggered them. Reaction loops are a usage
-error, not something the rig guards against.
+```ts
+const rig = new Rig({
+  routes: { receive: [node] },
+  reactions: {
+    "mutable://app/users/*": async (out, _read) => {
+      if (/* fault */ false) throw new Error("boom");
+      // → caught: emits reaction:error, onError phase:"reaction";
+      //   the triggering operation is UNAFFECTED.
+      const id = out[0].split("/").pop();
+      return [[`notify://email/${id}`, { kind: "user-updated" }]];
+      // returned tuples spawn a FRESH rig.send (own handle);
+      // that spawned op's rejections are swallowed (console.warn).
+    },
+  },
+});
+```
 
 ## Handling errors on @bandeira-tech/b3nd-move HTTP, WS, MCP clients
 
 ## Handling errors on @bandeira-tech/b3nd-save clients
-
-
