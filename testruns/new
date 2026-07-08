@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# testruns/new <plugin> <testslug>
+# Creates the meta scaffold for a new test. Edit meta/main.md before running.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() { echo "usage: testruns/new <plugin> <testslug>" >&2; exit 1; }
+[ $# -lt 2 ] && usage
+
+PLUGIN="$1"
+SLUG="$2"
+PLUGIN_DIR="$REPO_ROOT/$PLUGIN"
+META_DIR="$REPO_ROOT/testruns/$PLUGIN/$SLUG/meta"
+
+[ -d "$PLUGIN_DIR" ] || { echo "error: plugin '$PLUGIN' not found at $PLUGIN_DIR" >&2; exit 1; }
+
+if [ -d "$META_DIR" ]; then
+  echo "error: test '$SLUG' already exists at $META_DIR" >&2
+  exit 1
+fi
+
+mkdir -p "$META_DIR"
+
+cat > "$META_DIR/main.md" <<EOF
+# $SLUG
+
+## Task
+
+<!-- Describe the task the agent should perform. Be concrete — what should it produce or do? -->
+
+## Success criteria
+
+<!-- What does a passing run look like? What should appear in outputs/? -->
+
+## Notes
+
+<!-- Any setup, constraints, or context the agent needs that isn't in the skill. -->
+EOF
+
+echo "created: testruns/$PLUGIN/$SLUG/meta/main.md"
+echo "edit main.md, then: testruns/run $PLUGIN $SLUG"

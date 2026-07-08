@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# testruns/run <plugin> <testslug> [--model <model>] [--src <plugin-dir>]
+#
+# --model   claude model id (default: claude-sonnet-4-6)
+# --src     path to plugin dir to snapshot (default: repo/<plugin>)
+#           use this to run against a different tree or ref
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TESTRUNS="$REPO_ROOT/testruns"
+
+usage() {
+  echo "usage: testruns/run <plugin> <testslug> [--model <model>] [--src <plugin-dir>]" >&2
+  exit 1
+}
+
+[ $# -lt 2 ] && usage
+
+PLUGIN="$1"
+SLUG="$2"
+shift 2
+
+MODEL="claude-sonnet-4-6"
+SRC=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL="$2"; shift 2 ;;
+    --src)   SRC="$2";   shift 2 ;;
+    *) echo "unknown flag: $1" >&2; usage ;;
+  esac
+done
+
+META_DIR="$TESTRUNS/$PLUGIN/$SLUG/meta"
+TASK_FILE="$META_DIR/main.md"
+
+[ -f "$TASK_FILE" ] || {
+  echo "error: no test found at $META_DIR" >&2
+  echo "       run: testruns/new $PLUGIN $SLUG" >&2
+  exit 1
+}
+
+[ -z "$SRC" ] && SRC="$REPO_ROOT/$PLUGIN"
+[ -d "$SRC" ] || { echo "error: plugin source not found: $SRC" >&2; exit 1; }
+
+# Build run id: <ts>-<model-slug>-<randkey>
+TS="$(date -u +%Y%m%dT%H%M%S)"
+MODEL_SLUG="${MODEL//claude-/}"
+MODEL_SLUG="${MODEL_SLUG//[^a-zA-Z0-9]/-}"
+RANDKEY="$(openssl rand -hex 3)"
+RUN_ID="${TS}-${MODEL_SLUG}-${RANDKEY}"
+RUN_DIR="$TESTRUNS/$PLUGIN/$SLUG/runs/$RUN_ID"
+
+mkdir -p "$RUN_DIR/outputs"
+
+# Snapshot the plugin
+cp -r "$SRC" "$RUN_DIR/plugin"
+
+# Provenance
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+GIT_DIRTY="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | head -5 || echo "")"
+cat > "$RUN_DIR/provenance.md" <<EOF
+# Provenance
+
+- plugin: $PLUGIN
+- src: $SRC
+- git sha: $GIT_SHA
+$([ -n "$GIT_DIRTY" ] && echo "- dirty: yes" || echo "- dirty: no")
+$([ -n "$GIT_DIRTY" ] && printf '```\n%s\n```' "$GIT_DIRTY" || true)
+- model: $MODEL
+- run id: $RUN_ID
+EOF
+
+# Task (agent's entrypoint)
+cat > "$RUN_DIR/task.md" <<EOF
+# Task
+
+$(cat "$TASK_FILE")
+
+---
+
+Your workspace for this run is: $RUN_DIR
+Write all outputs to: $RUN_DIR/outputs/
+Close with a result.md at: $RUN_DIR/result.md
+
+result.md format:
+  status: DONE | DONE_WITH_CONCERNS | BLOCKED
+  summary: one sentence
+  detail: anything relevant
+EOF
+
+echo "run: $RUN_ID"
+echo "dir: $RUN_DIR"
+echo ""
+
+claude \
+  --plugin-dir "$RUN_DIR/plugin" \
+  --model "$MODEL" \
+  -p "$(cat "$RUN_DIR/task.md")" \
+  2>&1 | tee "$RUN_DIR/outputs/stdout.txt"
