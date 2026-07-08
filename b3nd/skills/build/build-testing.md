@@ -1,24 +1,22 @@
 # Build tests for a B3nd PIN — verify behavior, not just shape
 
 Contract-test a PIN against the verbs it implements, and against the *real*
-backend it will run on — the `ProtocolInterfaceNode` interface is a shape, not a
-behavioral guarantee (a `MemoryStore` and a `PostgresStore` differ in atomicity,
-durability, and push-down). This guide anchors RULE 1's "defensive testing
-scales with the stance."
+backend it will run on. Reach for this guide when your tests need to assert
+dispatch, rejection, or observability behavior (see the Warden + Defensive stance).
 
 ### RecordingClient — capture what the framework dispatched
 
 ```ts
-// RecordingClient is in src/testing/ (not published); import relative or via
-// a workspace path. All examples below assume Deno + @std/assert.
-import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+// RecordingClient is a workspace-internal test helper (not published).
+// Import via a relative or workspace-alias path — not a JSR specifier.
+import { RecordingClient } from "../../src/testing/recording-client.ts";
 import { Rig, connection } from "@bandeira-tech/b3nd-core";
 import { assertEquals } from "@std/assert";
 
 // Wire it behind a Rig and exercise your flow.
 const client = new RecordingClient();
 const rig = new Rig({
-  routes: { receive: [connection(client, ["mutable://"])], read: [connection(client, ["mutable://"])] },
+  routes: { receive: [connection(client, ["mutable://**"])], read: [connection(client, ["mutable://**"])] },
 });
 
 await rig.receive([["mutable://items/1", { name: "apple" }]]);
@@ -50,7 +48,9 @@ client.reset();
 ### Contract test — one suite, multiple real backends (Warden move)
 
 ```ts
-import { SaveClient, mapToBytes, MemoryStore, BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
+import { SaveClient, mapToBytes } from "@bandeira-tech/b3nd-save/clients";
+import { MemoryStore } from "@bandeira-tech/b3nd-save/memory";
+import { BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
 import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core";
 
 // The Warden stance: a PIN behind your interface, tested against every backend
@@ -92,22 +92,14 @@ runPinContract(makeMemoryPin);
 ### MemoryStore for fast unit tests vs. real backend for truth
 
 ```ts
-// MemoryStore: zero setup, synchronous semantics, no atomicBatch, no push-down.
-// Use it to iterate quickly on business logic.
+// MemoryStore: zero setup, synchronous semantics — iterate quickly on business logic.
 const mem = new MemoryStore();
 await mem.provisionEntity(mem.entitySupport(BYTES_ENTITY));
 const fastPin = new SaveClient(mapToBytes, BYTES_ENTITY, mem);
 
-// Where MemoryStore lies vs. a real backend:
-//  - atomicBatch: false — a multi-write batch is NOT atomic in memory; Postgres is.
-//  - push-down: MemoryStore walks the bucket in JS for fn=find; a DB engine indexes.
-//  - durability: MemoryStore resets on restart; persistence is never exercised.
-//  - concurrency: no isolation; concurrent tests share a Map with no locking.
-//
-// Use the real backend for:
-//  - sequence / conflict behavior (INVALID_SEQUENCE)
-//  - batch atomicity assertions
-//  - anything involving concurrent writers
+// Where MemoryStore diverges from a real backend:
+//  - atomicBatch: false — multi-write batches are NOT atomic; Postgres is.
+//  - push-down: MemoryStore walks the bucket in JS; a DB engine indexes.
 ```
 
 ### receive — assert per-slot ReceiveResult (partial batch success)
@@ -143,7 +135,7 @@ assertEquals(results[2].accepted, false);
 ### observe — drive a stream, assert fired uris; abort and teardown
 
 ```ts
-import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+import { RecordingClient } from "../../src/testing/recording-client.ts";
 
 // Fixture: emit two batches then stop.
 const client = new RecordingClient({
@@ -175,11 +167,11 @@ import { assertRejects } from "@std/assert";
 const store = new FunctionalClient({
   receive: (msgs) => Promise.resolve(msgs.map(() => ({ accepted: true }))),
 });
-const conn = connection(store, ["mutable://"]);
+const conn = connection(store, ["mutable://**"]);
 
 // beforeReceive hook — throw is the rejection mechanism; rejects the await.
 const rig = new Rig({
-  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  routes: { receive: [conn], read: [connection(store, ["mutable://**"])] },
   hooks: {
     beforeReceive: (ctx) => {
       if (ctx.uri.includes("forbidden")) throw new Error("denied");
@@ -193,11 +185,12 @@ await assertRejects(
   "denied",
 );
 
-// Program gate — return { code: "reject", error } to reject without throwing.
+// Program gate — a truthy `programResult.error` causes accepted:false; code value is irrelevant.
+// Program key must prefix-match the URI: uri === key or uri.startsWith(key + "/").
 const rigWithProgram = new Rig({
-  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  routes: { receive: [conn], read: [connection(store, ["mutable://**"])] },
   programs: {
-    "mutable://": () => Promise.resolve({ code: "reject", error: "policy violation" }),
+    "mutable://items": () => Promise.resolve({ code: "reject", error: "policy violation" }),
   },
 });
 
@@ -205,34 +198,34 @@ const [result] = await rigWithProgram.receive([["mutable://items/x", {}]]);
 assertEquals(result.accepted, false);
 assertEquals(result.error, "policy violation");
 
-// Handler gate — return [] to refuse without error (observe-only).
+// Handler gate — return [] to skip dispatch; pipeline still acks accepted:true.
 const rigWithHandler = new Rig({
-  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  routes: { receive: [conn], read: [connection(store, ["mutable://**"])] },
   programs: {
-    "mutable://": () => Promise.resolve({ code: "ok" }),
+    "mutable://items": () => Promise.resolve({ code: "ok" }),
   },
   handlers: {
-    "ok": async (_out, _result, _read) => [], // refuse dispatch — not an error
+    "ok": async (_out, _result, _read) => [], // no emissions → dispatch skipped
   },
 });
 
 const [h] = await rigWithHandler.receive([["mutable://items/y", {}]]);
-assertEquals(h.accepted, false); // [] from handler → no route → accepted:false
+assertEquals(h.accepted, true); // [] from handler → dispatch skipped, pipeline accepted
 ```
 
 ### Observability — correlate a flow via hooks and on-handle events
 
 ```ts
 import { Rig, connection } from "@bandeira-tech/b3nd-core";
-import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+import { RecordingClient } from "../../src/testing/recording-client.ts";
 
 // Inject a correlation id in beforeReceive; pick it up in on-handle events.
 const client = new RecordingClient();
-const conn = connection(client, ["mutable://"]);
+const conn = connection(client, ["mutable://**"]);
 const trace: { uri: string; correlationId: string }[] = [];
 
 const rig = new Rig({
-  routes: { receive: [conn], read: [connection(client, ["mutable://"])] },
+  routes: { receive: [conn], read: [connection(client, ["mutable://**"])] },
   hooks: {
     beforeReceive: (ctx) => {
       // Attach to the URI or to a side-channel your test controls.
