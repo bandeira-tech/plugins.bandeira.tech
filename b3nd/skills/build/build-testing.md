@@ -1,6 +1,6 @@
 # Build tests for a B3nd PIN
 
-Contract-test a PIN against the verbs it implements and against the real backend it will run on — the interface is a shape, not a behavioral guarantee.
+Sharing the `ProtocolInterfaceNode` interface does not mean shared behavior — a `MemoryStore` is a fast fixture, not a behavioral substitute for the real backend you'll ship on.
 
 ### 1. receive — assert per-slot ReceiveResult (partial batch success)
 
@@ -57,7 +57,27 @@ for await (const uris of client.observe(["mutable://items/**"], ac.signal)) {
 assertEquals(fired, ["mutable://items/1", "mutable://items/2", "mutable://items/3"]);
 ```
 
-### 3. spy — capture what a flow dispatched (FunctionalClient as call recorder)
+### 3. fake backend — canned read responses (test a consumer before wiring the real store)
+
+```ts
+import { FunctionalClient, type Output } from "@bandeira-tech/b3nd-core";
+import { assertEquals } from "@std/assert";
+
+const fake = new FunctionalClient({
+  read: <T = unknown>(urls: string[]): Promise<Output<T>[]> =>
+    Promise.resolve(
+      urls.map((u): Output<T> => [u, { name: "cached" } as T]),
+    ),
+  receive: (msgs) =>
+    Promise.resolve(msgs.map(() => ({ accepted: true }))),
+});
+
+// consumer under test calls read — gets fixture data without a real store
+const [[, payload]] = await fake.read(["mutable://items/1"]);
+assertEquals((payload as { name: string }).name, "cached");
+```
+
+### 4. spy — capture what a flow dispatched (FunctionalClient as call recorder)
 
 ```ts
 import {
@@ -88,27 +108,7 @@ assertEquals(calls.length, 1);
 assertEquals(calls[0][0][0], "mutable://items/1");
 ```
 
-### 4. fake backend — canned read responses (test a consumer before wiring the real store)
-
-```ts
-import { FunctionalClient, type Output } from "@bandeira-tech/b3nd-core";
-import { assertEquals } from "@std/assert";
-
-const fake = new FunctionalClient({
-  read: <T = unknown>(urls: string[]): Promise<Output<T>[]> =>
-    Promise.resolve(
-      urls.map((u): Output<T> => [u, { name: "cached" } as T]),
-    ),
-  receive: (msgs) =>
-    Promise.resolve(msgs.map(() => ({ accepted: true }))),
-});
-
-// consumer under test calls read — gets fixture data without a real store
-const [[, payload]] = await fake.read(["mutable://items/1"]);
-assertEquals((payload as { name: string }).name, "cached");
-```
-
-### 5. Rig gates — beforeReceive (throw), program (truthy `.error`), handler (`[]` = no-dispatch)
+### 5. beforeReceive gate — throw to reject
 
 ```ts
 import {
@@ -116,15 +116,14 @@ import {
   FunctionalClient,
   Rig,
 } from "@bandeira-tech/b3nd-core";
-import { assertRejects, assertEquals } from "@std/assert";
+import { assertRejects } from "@std/assert";
 
 const store = new FunctionalClient({
   receive: (msgs) => Promise.resolve(msgs.map(() => ({ accepted: true }))),
 });
 const conn = connection(store, ["mutable://**"]);
 
-// beforeReceive — throw is the rejection mechanism
-const rigGated = new Rig({
+const rig = new Rig({
   routes: { receive: [conn], read: [conn] },
   hooks: {
     beforeReceive: (ctx) => {
@@ -132,39 +131,72 @@ const rigGated = new Rig({
     },
   },
 });
+
 await assertRejects(
-  () => rigGated.receiveOrThrow([["mutable://forbidden/x", {}]]),
+  () => rig.receiveOrThrow([["mutable://forbidden/x", {}]]),
   Error,
   "denied",
 );
+```
 
-// program gate — truthy `.error` → accepted:false
-const rigProgram = new Rig({
+### 6. program gate — a truthy `.error` rejects
+
+```ts
+import {
+  connection,
+  FunctionalClient,
+  Rig,
+} from "@bandeira-tech/b3nd-core";
+import { assertEquals } from "@std/assert";
+
+const store = new FunctionalClient({
+  receive: (msgs) => Promise.resolve(msgs.map(() => ({ accepted: true }))),
+});
+const conn = connection(store, ["mutable://**"]);
+
+const rig = new Rig({
   routes: { receive: [conn], read: [conn] },
   programs: {
     "mutable://items": () =>
       Promise.resolve({ code: "reject", error: "policy violation" }),
   },
 });
-const [res] = await rigProgram.receive([["mutable://items/x", {}]]);
+
+const [res] = await rig.receive([["mutable://items/x", {}]]);
 assertEquals(res.accepted, false);
 assertEquals(res.error, "policy violation");
+```
 
-// handler gate — return [] → dispatch skipped, pipeline still accepted:true
-const rigHandler = new Rig({
+### 7. handler gate — return `[]` to skip dispatch (pipeline still accepted)
+
+```ts
+import {
+  connection,
+  FunctionalClient,
+  Rig,
+} from "@bandeira-tech/b3nd-core";
+import { assertEquals } from "@std/assert";
+
+const store = new FunctionalClient({
+  receive: (msgs) => Promise.resolve(msgs.map(() => ({ accepted: true }))),
+});
+const conn = connection(store, ["mutable://**"]);
+
+const rig = new Rig({
   routes: { receive: [conn], read: [conn] },
   programs: {
     "mutable://items": () => Promise.resolve({ code: "ok" }),
   },
   handlers: {
-    "ok": async () => [], // no emissions → no dispatch
+    "ok": async (_out, _result, _read) => [], // no emissions → no dispatch
   },
 });
-const [h] = await rigHandler.receive([["mutable://items/y", {}]]);
+
+const [h] = await rig.receive([["mutable://items/y", {}]]);
 assertEquals(h.accepted, true);
 ```
 
-### 6. contract test across backends — one suite, MemoryStore now; swap in Postgres later
+### 8. contract test across backends — one suite, MemoryStore now; swap in Postgres later
 
 ```ts
 import { SaveClient, mapToBytes } from "@bandeira-tech/b3nd-save/clients";
@@ -173,9 +205,8 @@ import { BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
 import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core";
 import { assertEquals } from "@std/assert";
 
-// MemoryStore diverges from a real backend:
-//   atomicBatch: false — multi-write batches are not atomic (Postgres is)
-//   push-down: MemoryStore walks the bucket in JS; a DB engine indexes
+// MemoryStore applies multi-write batches non-atomically; a real backend may differ.
+// push-down: MemoryStore walks the bucket in JS; a DB engine indexes
 
 async function makeMemoryPin(): Promise<ProtocolInterfaceNode> {
   const store = new MemoryStore();
@@ -209,7 +240,7 @@ runPinContract(makeMemoryPin);
 // runPinContract(makePostgresPin); // same suite, real backend
 ```
 
-### 7. observability — inject a correlation id via a beforeSend hook
+### 9. observability — inject a correlation id via a beforeSend hook
 
 ```ts
 import {
@@ -236,9 +267,12 @@ const rig = new Rig({
 });
 
 const op = rig.send([["mutable://items/z", { v: 1 }]]);
-op.on("route:success", (e) => {
-  assertEquals(trace[0].uri, e.emission[0]);
-});
 await op;
+// beforeSend runs synchronously in the pipeline before _pipelineDone resolves await op —
+// trace is fully populated here; asserting inside a route:success handler is unsafe
+// (handler throws are caught and logged, never reaching the test runner).
+assertEquals(trace.length, 1);
+assertEquals(trace[0].uri, "mutable://items/z");
+assertEquals(trace[0].correlationId, "req-001");
 await op.settled;
 ```
