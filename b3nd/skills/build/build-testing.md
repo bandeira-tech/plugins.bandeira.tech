@@ -6,19 +6,247 @@ behavioral guarantee (a `MemoryStore` and a `PostgresStore` differ in atomicity,
 durability, and push-down). This guide anchors RULE 1's "defensive testing
 scales with the stance."
 
-> **STATUS: STUB — not yet written.** Scaffolded so the gap is tracked and can be
-> picked up outside this session. Follow RULE 0 and `CLAUDE.md` when filling it.
+### RecordingClient — capture what the framework dispatched
 
-## To write — one code block per item
+```ts
+// RecordingClient is in src/testing/ (not published); import relative or via
+// a workspace path. All examples below assume Deno + @std/assert.
+import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+import { Rig, connection } from "@bandeira-tech/b3nd-core";
+import { assertEquals } from "@std/assert";
 
-- [ ] Assert against `RecordingClient` (core `testing/` module) — capture and
-      inspect the Outputs a flow emits.
-- [ ] **Contract test**: one suite run across multiple *real* backends (the
-      Warden move) — prove substitutability instead of assuming it.
-- [ ] `MemoryStore` for fast unit tests vs. the real backend for truth; when
-      each lies.
-- [ ] `receive` — assert per-slot `ReceiveResult` (partial batch success).
-- [ ] `observe` — drive a stream, assert fired uris; abort/teardown.
-- [ ] `beforeReceive` / program / handler gates — assert rejection paths.
-- [ ] Fold in observability: tracing via Rig hooks/events + a `preSend`
-      correlation id (analysis G7 — no separate file).
+// Wire it behind a Rig and exercise your flow.
+const client = new RecordingClient();
+const rig = new Rig({
+  routes: { receive: [connection(client, ["mutable://"])], read: [connection(client, ["mutable://"])] },
+});
+
+await rig.receive([["mutable://items/1", { name: "apple" }]]);
+await rig.read(["mutable://items/1"]);
+
+// Assert on dispatch — what the framework sent, not what the backend stored.
+assertEquals(client.callsOf("receive").length, 1);
+assertEquals(client.callsOf("receive")[0].msgs[0][0], "mutable://items/1");
+assertEquals(client.callsOf("read")[0].urls, ["mutable://items/1"]);
+```
+
+### RecordingClient fixtures — supply canned responses
+
+```ts
+import type { Output } from "@bandeira-tech/b3nd-core";
+
+// Override any subset of verbs; the rest fall back to sensible defaults:
+// receive → { accepted: true }, read → [url, undefined], observe → empty stream, status → healthy.
+const client = new RecordingClient({
+  read: (urls) => urls.map((u): Output => [u, { name: "cached" }]),
+  receive: (msgs) =>
+    msgs.map((_, i) => i === 0 ? { accepted: false, error: "duplicate" } : { accepted: true }),
+});
+
+// client.reset() clears calls without touching fixtures — useful between sub-tests.
+client.reset();
+```
+
+### Contract test — one suite, multiple real backends (Warden move)
+
+```ts
+import { SaveClient, mapToBytes, MemoryStore, BYTES_ENTITY } from "@bandeira-tech/b3nd-save";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core";
+
+// The Warden stance: a PIN behind your interface, tested against every backend
+// you'll ship. MemoryStore is fast but not a behavioral guarantee of PostgresStore.
+async function makeMemoryPin(): Promise<ProtocolInterfaceNode> {
+  const store = new MemoryStore();
+  await store.provisionEntity(store.entitySupport(BYTES_ENTITY));
+  return new SaveClient(mapToBytes, BYTES_ENTITY, store);
+}
+
+// async function makePostgresPin(): Promise<ProtocolInterfaceNode> { ... }
+
+function runPinContract(makePin: () => Promise<ProtocolInterfaceNode>) {
+  Deno.test("contract: receive then read-back", async () => {
+    const pin = await makePin();
+    const [r] = await pin.receive([["mutable://x", new TextEncoder().encode("hi")]]);
+    assertEquals(r.accepted, true);
+    const [[, payload]] = await pin.read(["mutable://x"]);
+    // backend-specific payload shape — check the contract your consumers depend on
+    /* your assertion */
+    void payload;
+  });
+
+  Deno.test("contract: batch receive — per-slot results", async () => {
+    const pin = await makePin();
+    const results = await pin.receive([
+      ["mutable://a", new TextEncoder().encode("A")],
+      ["mutable://b", new TextEncoder().encode("B")],
+    ]);
+    assertEquals(results.length, 2);
+    assertEquals(results.every((r) => r.accepted), true);
+  });
+}
+
+runPinContract(makeMemoryPin);
+// runPinContract(makePostgresPin); // same suite, real backend
+```
+
+### MemoryStore for fast unit tests vs. real backend for truth
+
+```ts
+// MemoryStore: zero setup, synchronous semantics, no atomicBatch, no push-down.
+// Use it to iterate quickly on business logic.
+const mem = new MemoryStore();
+await mem.provisionEntity(mem.entitySupport(BYTES_ENTITY));
+const fastPin = new SaveClient(mapToBytes, BYTES_ENTITY, mem);
+
+// Where MemoryStore lies vs. a real backend:
+//  - atomicBatch: false — a multi-write batch is NOT atomic in memory; Postgres is.
+//  - push-down: MemoryStore walks the bucket in JS for fn=find; a DB engine indexes.
+//  - durability: MemoryStore resets on restart; persistence is never exercised.
+//  - concurrency: no isolation; concurrent tests share a Map with no locking.
+//
+// Use the real backend for:
+//  - sequence / conflict behavior (INVALID_SEQUENCE)
+//  - batch atomicity assertions
+//  - anything involving concurrent writers
+```
+
+### receive — assert per-slot ReceiveResult (partial batch success)
+
+```ts
+import { FunctionalClient, type ReceiveResult } from "@bandeira-tech/b3nd-core";
+
+// Build a PIN that rejects even-index messages.
+const node = new FunctionalClient({
+  receive: (msgs) =>
+    Promise.resolve(
+      msgs.map((_, i): ReceiveResult =>
+        i % 2 === 0
+          ? { accepted: false, error: "even-slot rejected" }
+          : { accepted: true }
+      ),
+    ),
+});
+
+const results = await node.receive([
+  ["mutable://a", 1],
+  ["mutable://b", 2],
+  ["mutable://c", 3],
+]);
+
+// Batch never throws — inspect per-slot.
+assertEquals(results[0].accepted, false);
+assertEquals(results[0].error, "even-slot rejected");
+assertEquals(results[1].accepted, true);
+assertEquals(results[2].accepted, false);
+```
+
+### observe — drive a stream, assert fired uris; abort and teardown
+
+```ts
+import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+
+// Fixture: emit two batches then stop.
+const client = new RecordingClient({
+  observe: async function* (_urls, signal) {
+    if (signal.aborted) return;
+    yield ["mutable://items/1", "mutable://items/2"] as const;
+    yield ["mutable://items/3"] as const;
+  },
+});
+
+const ac = new AbortController();
+const fired: string[] = [];
+
+for await (const uris of client.observe(["mutable://items/**"], ac.signal)) {
+  fired.push(...uris);
+  if (fired.length >= 3) ac.abort(); // teardown — loop exits cleanly on next iteration
+}
+
+assertEquals(fired, ["mutable://items/1", "mutable://items/2", "mutable://items/3"]);
+assertEquals(client.callsOf("observe")[0].urls, ["mutable://items/**"]);
+```
+
+### beforeReceive / program / handler gates — assert rejection paths
+
+```ts
+import { Rig, connection, FunctionalClient } from "@bandeira-tech/b3nd-core";
+import { assertRejects } from "@std/assert";
+
+const store = new FunctionalClient({
+  receive: (msgs) => Promise.resolve(msgs.map(() => ({ accepted: true }))),
+});
+const conn = connection(store, ["mutable://"]);
+
+// beforeReceive hook — throw is the rejection mechanism; rejects the await.
+const rig = new Rig({
+  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  hooks: {
+    beforeReceive: (ctx) => {
+      if (ctx.uri.includes("forbidden")) throw new Error("denied");
+    },
+  },
+});
+
+await assertRejects(
+  () => rig.receiveOrThrow([["mutable://forbidden/x", {}]]),
+  Error,
+  "denied",
+);
+
+// Program gate — return { code: "reject", error } to reject without throwing.
+const rigWithProgram = new Rig({
+  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  programs: {
+    "mutable://": () => Promise.resolve({ code: "reject", error: "policy violation" }),
+  },
+});
+
+const [result] = await rigWithProgram.receive([["mutable://items/x", {}]]);
+assertEquals(result.accepted, false);
+assertEquals(result.error, "policy violation");
+
+// Handler gate — return [] to refuse without error (observe-only).
+const rigWithHandler = new Rig({
+  routes: { receive: [conn], read: [connection(store, ["mutable://"])] },
+  programs: {
+    "mutable://": () => Promise.resolve({ code: "ok" }),
+  },
+  handlers: {
+    "ok": async (_out, _result, _read) => [], // refuse dispatch — not an error
+  },
+});
+
+const [h] = await rigWithHandler.receive([["mutable://items/y", {}]]);
+assertEquals(h.accepted, false); // [] from handler → no route → accepted:false
+```
+
+### Observability — correlate a flow via hooks and on-handle events
+
+```ts
+import { Rig, connection } from "@bandeira-tech/b3nd-core";
+import { RecordingClient } from "@bandeira-tech/b3nd-core/src/testing/recording-client.ts";
+
+// Inject a correlation id in beforeReceive; pick it up in on-handle events.
+const client = new RecordingClient();
+const conn = connection(client, ["mutable://"]);
+const trace: { uri: string; correlationId: string }[] = [];
+
+const rig = new Rig({
+  routes: { receive: [conn], read: [connection(client, ["mutable://"])] },
+  hooks: {
+    beforeReceive: (ctx) => {
+      // Attach to the URI or to a side-channel your test controls.
+      trace.push({ uri: ctx.uri, correlationId: "req-001" });
+    },
+  },
+});
+
+const op = rig.receive([["mutable://items/z", { v: 1 }]]);
+op.on("route:success", (e) => {
+  // e.emission is the dispatched Output; correlate via the trace side-channel.
+  assertEquals(trace[0].uri, e.emission[0]);
+});
+
+await op;
+await op.settled;
+```
