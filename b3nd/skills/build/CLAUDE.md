@@ -12,9 +12,10 @@ concepts elsewhere (`learn`, the source). Here, the code does the talking.
    line, no more. It labels the block; it does not explain it. Let the code
    speak below it.
 
-**Model to match:** `build-endpoint-integration.md` and
-`build-entrypoint-integration.md` — the files that were here first. Match their
-density. If a file has grown paragraphs of explanation, it has drifted.
+**Model to match:** `build-client-module.md` and `build-error-handling.md` —
+verified TS at the right density. Match their code-first shape: a one-line lead,
+then a block that speaks for itself. If a file has grown paragraphs of
+explanation, it has drifted.
 
 ## Rules
 
