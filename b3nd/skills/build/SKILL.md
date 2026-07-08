@@ -37,16 +37,16 @@ Add B3nd to systems that already exist, incrementally.
 
 Begin a new application on B3nd, local-first, and switch infrastructure later.
 
-- **Build a Web App** — start local-first with localStorage, then point the
-  same client PIN at localhost or a B3nd server of your choice.
-- **Build a CLI App** — deliver local-first with the filesystem or a local
-  database; ship pluggable, extensible terminal interfaces.
-- **Build a Backend App** — serve domain or data services over HTTP, WS,
-  and/or MCP using a rig that handles and reacts to received data.
-- **Build a Data Protocol** — design and package the URI structures, payload
-  types, classifications, validations, and handling that support your PINs.
-- **Build a Domain Protocol** — design and package the URI structures, payload
-  types, classifications, validations, and handling that support your PINs.
+- **[Build a Web App](build-web-app.md)** — start local-first with localStorage,
+  then point the same client PIN at localhost or a B3nd server of your choice.
+- **[Build a CLI App](build-cli-app.md)** — deliver local-first with the
+  filesystem or a local database; ship pluggable, extensible terminal interfaces.
+- **[Build a Backend App](build-backend-app.md)** — serve domain or data services
+  over HTTP, WS, and/or MCP using a rig that handles and reacts to received data.
+- **[Build a Data Protocol](build-data-protocol.md)** — design the domain-agnostic
+  plumbing: URI grammar, payload types, classification, validation, and handling.
+- **[Build a Domain Protocol](build-domain-protocol.md)** — model a domain's
+  object lifecycle, states, and semantics, shipped as mountable uri/payload rules.
 
-> Start-fresh guides are in progress. Until each has its own page, use `learn`
-> for the concepts and follow RULE 0 to read the current source for mechanics.
+> These guides assume you've read the basics above. They only move forward — for
+> the concepts, use `learn`; follow RULE 0 to read current source for mechanics.
