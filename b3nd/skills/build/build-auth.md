@@ -148,7 +148,7 @@ const receiverRig = new Rig({
 ### 7. encrypt at rest — a `SaveMapper` that encrypts on write, decrypts on read
 
 ```ts
-import type SaveMapper from "@bandeira-tech/b3nd-save/clients";
+import type { SaveMapper } from "@bandeira-tech/b3nd-save/clients";
 import { encryptSymmetric, decryptSymmetric, type EncryptedPayload } from "@bandeira-tech/b3nd-core/encrypt";
 
 const encoder = new TextEncoder();
