@@ -26,6 +26,7 @@ result.accepted; // true — pipeline accepted; routes settle in background
 
 ```ts
 import { Identity } from "@bandeira-tech/b3nd-core";
+// rig setup elided — see block 1
 
 const id = await Identity.fromSeed("my-secret");
 // signMessage<T>(payload: T): Promise<AuthenticatedMessage<T>>
@@ -39,6 +40,7 @@ await rig.send([["mutable://app/transfer", envelope]]);
 
 ```ts
 import { Identity, Rig, connection } from "@bandeira-tech/b3nd-core";
+// node (storage PIN) setup elided
 
 // beforeReceive ctx: { uri: string; data: unknown }
 // throw to reject the tuple before it enters the pipeline
@@ -63,14 +65,14 @@ const rig = new Rig({
 ### 4. inject a token/signature over HTTP — move `HttpClient` `preSend`
 
 ```ts
-import { HttpClient } from "@bandeira-tech/b3nd-move/http";
-import { codec } from "@bandeira-tech/b3nd-move";
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
 
 // preSend: (req: HttpPreSendRequest) => void | Promise<void>
 // req has { url: URL; headers: Headers; body: BodyInit | null } — mutate in place
 const client = new HttpClient({
   url: "https://api.example.com",
-  codec,
+  codec: httpOutputsFrame(),
   preSend: (req) => {
     req.headers.set("Authorization", `Bearer ${getToken()}`);
     // or: req.headers.set("X-Signature", sign(req.body))
@@ -84,7 +86,8 @@ const client = new HttpClient({
 ```ts
 // An auth node (a PIN) mints grants — callers prove they hold a valid grant,
 // not a personal key. Data nodes never see user keys; they validate the grant.
-import { FunctionalClient, type Output, type ReceiveResult } from "@bandeira-tech/b3nd-core";
+import { FunctionalClient, Rig, connection, type Output, type ReceiveResult } from "@bandeira-tech/b3nd-core";
+// data-node PIN setup elided
 
 // auth-node PIN: receive a grant-request, issue a signed grant
 const authNode = new FunctionalClient({
@@ -113,7 +116,9 @@ const dataRig = new Rig({
 ```ts
 // No central trust needed. The sender signs the content; the receiver verifies
 // the signature against the sender's pubkey. Ownership is self-evident from the key.
-import { Identity } from "@bandeira-tech/b3nd-core";
+import { Identity, Rig, connection } from "@bandeira-tech/b3nd-core";
+// rig setup elided — sender rig constructed separately (see block 1)
+// node (storage PIN) setup elided
 
 // sender: sign the specific content being claimed
 const sender = await Identity.fromSeed("sender-secret");
@@ -143,25 +148,28 @@ const receiverRig = new Rig({
 ### 7. encrypt at rest — a `SaveMapper` that encrypts on write, decrypts on read
 
 ```ts
-// from "@bandeira-tech/b3nd-save"
-import type { SaveMapper } from "@bandeira-tech/b3nd-save/clients/save-client";
-// from "@bandeira-tech/b3nd-core/encrypt"
-import { encryptSymmetric, decryptSymmetric } from "@bandeira-tech/b3nd-core/encrypt";
+import type SaveMapper from "@bandeira-tech/b3nd-save/clients";
+import { encryptSymmetric, decryptSymmetric, type EncryptedPayload } from "@bandeira-tech/b3nd-core/encrypt";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const KEY_HEX = /* 32-byte hex key from your key-management layer */ "...";
 
+// EncryptedPayload: { data: string /* base64 ciphertext */; nonce: string /* base64 */ }
+// encryptSymmetric(bytes, keyHex) => Promise<EncryptedPayload>
+// decryptSymmetric(payload: EncryptedPayload, keyHex) => Promise<Uint8Array>
+
 // SaveMapper<TIn, TOut>: toStore runs on write; fromStore runs on read
+// entity must store the EncryptedPayload object shape (data + nonce as base64 strings)
 const encryptedMapper: SaveMapper<unknown, unknown> = {
   async toStore(wireUri, payload) {
     const bytes = encoder.encode(JSON.stringify(payload));
-    const encrypted = await encryptSymmetric(bytes, KEY_HEX);
+    const encrypted: EncryptedPayload = await encryptSymmetric(bytes, KEY_HEX);
     return { uri: wireUri, record: { payload: encrypted } };
   },
   async fromStore(storeUri, record) {
     if (!record?.payload) return { uri: storeUri };
-    const bytes = await decryptSymmetric(record.payload as Parameters<typeof decryptSymmetric>[0], KEY_HEX);
+    const bytes = await decryptSymmetric(record.payload as EncryptedPayload, KEY_HEX);
     return { uri: storeUri, payload: JSON.parse(decoder.decode(bytes)) };
   },
 };
