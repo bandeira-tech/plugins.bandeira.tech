@@ -47,6 +47,9 @@ Add B3nd to systems that already exist, incrementally.
 
 Begin a new application on B3nd, local-first, and switch infrastructure later.
 
+- **[Build a Personal Store](build-personal-store.md)** — the builder floor: own
+  a namespace by a keypair (identity, content-addressed write-once, signed
+  ownership, private/shared). b3nd gives the primitives; you write the policy.
 - **[Build a Web App](build-web-app.md)** — start local-first with localStorage,
   then point the same client PIN at localhost or a B3nd server of your choice.
 - **[Build a CLI App](build-cli-app.md)** — deliver local-first with the
